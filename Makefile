@@ -8,10 +8,12 @@
 CC=gcc 
 
 #flags used during compilation
-CFLAGS= -std=c++11 -L/usr/include -I/usr/include/boost 
-LDFLAGS= -lboost_filesystem -lboost_system -lboost_thread 
+CFLAGS= -L/usr/include 
+#-I/usr/include/boost 
+LDFLAGS= 
+#-lboost_filesystem -lboost_system -lboost_thread 
 
-PRODUCT=ssfi
+PRODUCT=client
 
 BINARY =bin
 OBJECTLOC =obj
@@ -25,22 +27,17 @@ clean:
 	-rm -f $(BINARY)/$(PRODUCT) 
 
 
-OBJECTS = $(OBJECTLOC)/listtopWords.o \
-		  $(OBJECTLOC)/SearchManager.o \
+#OBJECTS = $(OBJECTLOC)/listtopWords.o 
+
+		  #$(OBJECTLOC)/SearchManager.o \
 		  $(OBJECTLOC)/workerManager.o \
 		  $(OBJECTLOC)/SSFI.o
 	  
-$(PRODUCT):$(OBJECTS)
-		$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $(BINARY)/$(PRODUCT)
+#$(PRODUCT):$(OBJECTS)
+#		$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $(BINARY)/$(PRODUCT)
 
-$(OBJECTLOC)/listtopWords.o: $(SOURCELOC)/listtopWords.cpp
+$(OBJECTLOC)/server.o: $(SOURCELOC)/server.c
 		$(CC) $(CFLAGS) -c $^ $(LDFLAGS) -o $@
 
-$(OBJECTLOC)/SearchManager.o: $(SOURCELOC)/SearchManager.cpp
+$(OBJECTLOC)/client.o: $(SOURCELOC)/client.c
 		$(CC) $(CFLAGS) -c $^ $(LDFLAGS) -o $@		
-
-$(OBJECTLOC)/workerManager.o: $(SOURCELOC)/workerManager.cpp
-		$(CC) $(CFLAGS) -c $^ $(LDFLAGS) -o $@		
-
-$(OBJECTLOC)/SSFI.o: $(SOURCELOC)/SSFI.cpp
-		$(CC) $(CFLAGS) -c $^ $(LDFLAGS) -o $@				
