@@ -1,0 +1,14 @@
+
+Testcases 
+---------
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,,,,,,,,,,
+
+pingSites www.google.com, ,www.hackerrank.com,www.msn.com,www.hotmail.com
+
+pingSites www.colorado.edu,asdmasd.asd
+
+pingSites www.colas.edu 
+
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,
+
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,

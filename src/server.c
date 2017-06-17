@@ -22,6 +22,7 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <stdbool.h>
 
 
 
@@ -44,7 +45,7 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 #define MAX_COL_SIZE 100
 
 //Worker Threads
-#define MAX_WORKER_THREADS 5        
+#define MAX_WORKER_THREADS 3        
 
 #define NSEC_PER_SEC (1000000000)
 #define DELAY_TICKS (1)
@@ -80,10 +81,11 @@ typedef enum _ErrorCodes{
 }ErrorCodes;
 
 // For input command split 
-enum HANDLE_STATUS{
-		IN_PROGRESS,//Extra Character
+enum HANDLE_STATUS{		
 		IN_QUEUE,//Command type
+		IN_PROGRESS,//Extra Character
 		COMPLETE,//Handle info
+		IN_ERROR
 };//Command format
 
 struct site_content{
@@ -270,7 +272,6 @@ struct timespec connectSite(char host_address[]){
 
 int sendDataToClient (char sendMessage[],int client_sock)
 {
-	//sprintf(sendMessage,"%s~%s~%s~%s~%s~%s~%s~",sendData.DFCRequestUser,sendData.DFCRequestPass,sendData.DFCRequestCommand,sendData.DFCRequestFile,sendData.DFCData,sendData.DFCRequestFile2,sendData.DFCData2);
 	DEBUG_PRINT("Message to Client =>%s",sendMessage);
 	write(client_sock,sendMessage,strlen(sendMessage));		
 }
@@ -281,22 +282,20 @@ pthread_mutex_t dequeue_mutex;
 
 //http://www.rowleydownload.co.uk/avr/documentation/index.htm?http://www.rowleydownload.co.uk/avr/documentation/ctl_message_queues.htm
 void * workerThreadImplementation(){
-
-	//char *hostname = "www.colorado.edu";//sample input
 	//Convert the hostname to hostIPaddress 
     char host_address[MAX_IP_ADDRESS];
     struct hostent *hostnet;
     struct in_addr **addresslist;
-    int i;
+    int i=0;
     
     struct timespec redt_connectionTime;	
     //Message Queue
     int msqid;
     key_t key;
-    //struct sites_queue queue;
+ 
 
-    DEBUG_PRINT("Worker Thread implementation");      
-    //Dequeue the Host name here      
+    
+    //Prep for Dequeue the Host name here      
 	if ((key = ftok("server.c",'B')) <0) {  /* same key as server.c */
 		  perror("ftok");
     }
@@ -305,94 +304,110 @@ void * workerThreadImplementation(){
         perror("msgget");      
     }    	
 	
-
+        struct msqid_ds msqid_ds, *buf;
+	    buf = &msqid_ds;
 
     while(1){
-    	DEBUG_PRINT("Entering Thread");
-
-    	pthread_mutex_lock(&dequeue_mutex);
+    	bool skip_ping=true;
+    	DEBUG_PRINT("Worker Thread implementation");      
+    	/*int rtrn = msgctl(msqid, IPC_STAT, &s_queue);             
+	     printf("msg_qbytes     = %d\n",(int)buf->msg_qbytes);
+	     printf("PID of last rcvd = %d\n",(int)buf->msg_lrpid);
+	     printf("Current no(messages) = %d\n",(int)buf->msg_qnum);
+	     printf("Current no(byes) = %d\n",(int)(buf->__msg_cbytes));
+		
+		*/
+		//Lock Mutex before dequeue from queue
+		pthread_mutex_lock(&dequeue_mutex);	
     	
-    	if(msgrcv(msqid, &s_queue, sizeof (struct site_content), 0, 0)<0) {
+    	if(msgrcv(msqid, &s_queue, sizeof (struct site_content), 0, 0)<0 || !skip_ping) {
             perror("msgrcv");
-            exit(1);//shouldnt exit but try again (logic imp)
+            //exit(1);//shouldnt exit but try again (logic imp)
+            s_queue.q_site_content.status=IN_ERROR;
+            skip_ping=false;
         }
 
+		//s_queue.msg_qbytes = 1024;
         pthread_mutex_unlock(&dequeue_mutex);
-        DEBUG_PRINT("Dequeued Message Queue");
-        //      
-  
+        
         struct site_content dequeue_site= s_queue.q_site_content;
-        DEBUG_PRINT("Site retrieved %s",s_queue.q_site_content.site_name);
-	    if ((hostnet = gethostbyname(s_queue.q_site_content.site_name)) == NULL) 
+
+		DEBUG_PRINT("Dequeued Site %s and Handle ID %d ",dequeue_site.site_name,dequeue_site.handle_id);  
+      
+       
+	    if ((hostnet = gethostbyname(dequeue_site.site_name)) == NULL || !skip_ping) 
 	    {        
+	    	printf("Unreachable site \n");
+	    	dequeue_site.status=IN_ERROR;
 	        perror("hostnet");	
-	        return;
+	        skip_ping=false;
 	    }		    
-	    addresslist = (struct in_addr **) hostnet->h_addr_list;
-	     
-	    for(i = 0; addresslist[i] != NULL; i++) 
-	    {
-	        strcpy(host_address,inet_ntoa(*addresslist[i]));
-	    }
-	    //Conversion complete
-		DEBUG_PRINT("Dequeued Site %s and Handle ID %d ",dequeue_site.site_name,dequeue_site.handle_id);
 
-		//Clearing data before calculations 
-		dequeue_site.min_time.tv_sec=0;
-		dequeue_site.max_time.tv_sec=0;
-		dequeue_site.total_time.tv_sec=0;
-		dequeue_site.avg_time.tv_sec=0;
 
-		dequeue_site.min_time.tv_nsec=999999999;
-		dequeue_site.max_time.tv_nsec=0;
-		dequeue_site.total_time.tv_nsec=0;
-		dequeue_site.avg_time.tv_nsec=0;
+	    if(skip_ping){
+		    addresslist = (struct in_addr **) hostnet->h_addr_list;
+		     
+		    for(i = 0; addresslist[i] != NULL; i++) 
+		    {
+		        strcpy(host_address,inet_ntoa(*addresslist[i]));
+		    }
+		    //Conversion complete
 
-		dequeue_site.status = IN_PROGRESS;
+			//Clearing data before calculations 
+			dequeue_site.min_time.tv_sec=0;
+			dequeue_site.max_time.tv_sec=0;
+			dequeue_site.total_time.tv_sec=0;
+			dequeue_site.avg_time.tv_sec=0;
+
+			dequeue_site.min_time.tv_nsec=999999999;
+			dequeue_site.max_time.tv_nsec=0;
+			dequeue_site.total_time.tv_nsec=0;
+			dequeue_site.avg_time.tv_nsec=0;
+			dequeue_site.status = IN_PROGRESS;
+			
+
+			//Running the connection for ten times and calulating in nano secs	
+			for(i=0;i<10;i++){				
+				redt_connectionTime=connectSite(host_address);
+				//DEBUG_PRINT("Time(ns) = %ld ",redt_connectionTime.tv_nsec);          
+				if(redt_connectionTime.tv_nsec > dequeue_site.max_time.tv_nsec ){
+					dequeue_site.max_time.tv_nsec = redt_connectionTime.tv_nsec;
+					dequeue_site.max_time.tv_sec = redt_connectionTime.tv_sec;
+				}
+				if(redt_connectionTime.tv_nsec <= dequeue_site.min_time.tv_nsec){
+					dequeue_site.min_time.tv_nsec = redt_connectionTime.tv_nsec;
+					dequeue_site.min_time.tv_sec = redt_connectionTime.tv_sec;
+				}
+				dequeue_site.total_time.tv_nsec += redt_connectionTime.tv_nsec;
+				dequeue_site.total_time.tv_sec += redt_connectionTime.tv_sec;
+
+			}	
+			dequeue_site.avg_time.tv_nsec = dequeue_site.total_time.tv_nsec/10;
+			dequeue_site.avg_time.tv_sec = dequeue_site.total_time.tv_sec/10;
+			dequeue_site.status = COMPLETE;
+
+			//Add to completed array of Structs 
 		
-
-		//Running the connection for ten times and calulating in nano secs	
-		for(i=0;i<10;i++){				
-			redt_connectionTime=connectSite(host_address);
-			//DEBUG_PRINT("Time(ns) = %ld ",redt_connectionTime.tv_nsec);          
-			if(redt_connectionTime.tv_nsec > dequeue_site.max_time.tv_nsec ){
-				dequeue_site.max_time.tv_nsec = redt_connectionTime.tv_nsec;
-				dequeue_site.max_time.tv_sec = redt_connectionTime.tv_sec;
-			}
-			if(redt_connectionTime.tv_nsec <= dequeue_site.min_time.tv_nsec){
-				dequeue_site.min_time.tv_nsec = redt_connectionTime.tv_nsec;
-				dequeue_site.min_time.tv_sec = redt_connectionTime.tv_sec;
-			}
-			dequeue_site.total_time.tv_nsec += redt_connectionTime.tv_nsec;
-			dequeue_site.total_time.tv_sec += redt_connectionTime.tv_sec;
-
+			
+			DEBUG_PRINT("Looping the Worker Thread");		
 		}	
-		dequeue_site.avg_time.tv_nsec = dequeue_site.total_time.tv_nsec/10;
-		dequeue_site.avg_time.tv_sec = dequeue_site.total_time.tv_sec/10;
 		//Printing seconds 
-		DEBUG_PRINT("\n MAX Time(ms) = %ld\n \
+		printf("\n \
+				     Site Name  = %s\n  \
+				     MAX Time(ms) = %ld\n \
 			         MIN Time(ms) = %ld\n \
 			         TOTAL Time(ms) = %ld\n \
 			         AVG Time(ms) = %ld\n \
-			         ",dequeue_site.max_time.tv_nsec/1000000 
+			         Status  = %d \n \
+			          ",dequeue_site.site_name
+			          ,dequeue_site.max_time.tv_nsec/1000000 
 			          ,dequeue_site.min_time.tv_nsec/1000000
 			          ,dequeue_site.total_time.tv_nsec/1000000
 			          ,dequeue_site.avg_time.tv_nsec/1000000
+			          ,dequeue_site.status
 			         );
-
-		DEBUG_PRINT("\n                   \
-					  MAX Time(s) = %ld\n \
-			          MIN Time(s) = %ld\n \
-			          TOTAL Time(s) = %ld\n \
-			          AVG Time(s) = %ld\n \
-			         ",dequeue_site.max_time.tv_sec 
-			          ,dequeue_site.min_time.tv_sec
-			          ,dequeue_site.total_time.tv_sec
-			          ,dequeue_site.avg_time.tv_sec
-			         );
-		DEBUG_PRINT("Exiting Dequeue");		
+		DEBUG_PRINT("Exiting Thread");		
 	}	
-	DEBUG_PRINT("Exiting Thread");		
 
 }
 
@@ -415,13 +430,21 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 		if((total_attr_commands=splitString(site_list_copy,",",list_sites,MAX_SITE_SIZE))<0){
 			perror("Split");
 		}
-		for(i=0;i<total_attr_commands;i++){
-			DEBUG_PRINT("Site %s => %d ",list_sites[i],total_attr_commands);
-			strcpy(s_queue.q_site_content.site_name,list_sites[i]);
-			pthread_mutex_lock(&queue_mutex);
-			if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
-		            perror("msgsnd");
-		    pthread_mutex_unlock(&queue_mutex);    
+		for(i=1;i<total_attr_commands;i++){
+			DEBUG_PRINT("Enqueue Site %s => %d ",list_sites[i],total_attr_commands);
+			
+			if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
+				strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
+				
+				pthread_mutex_lock(&queue_mutex);
+				if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
+			            perror("msgsnd");
+			    pthread_mutex_unlock(&queue_mutex);   
+
+			}else{
+				DEBUG_PRINT("Error in Site");
+			}     
+
 
 		}        
 	}	
@@ -439,12 +462,13 @@ int handleGeneration(){
 }
 
 
-int commandAnalysis(char inputCommand[]){
+char *commandAnalysis(char inputCommand[]){
 
 		int total_attr_commands=0,handle_id=0;
 		char (*action)[MAX_COL_SIZE];
 
 		char message_bkp[MAXBUFSIZE];//store message from client 
+		char *reply_string=(char *)malloc(sizeof(char)*MAXBUFSIZE);
 
 		if ((action=calloc(MAX_COL_SIZE,sizeof(action)))){	
 			DEBUG_PRINT("Malloc allocated");
@@ -457,9 +481,11 @@ int commandAnalysis(char inputCommand[]){
 			DEBUG_PRINT("Command Type %s =>%s ",action[1],action[2]);
 			if ((strncmp(action[command_location],"pingSites",strlen("pingSites"))==0)){
 					
-					handle_id=handleGeneration();
-					DEBUG_PRINT("Inside pingSites");
+					DEBUG_PRINT("Inside pingSites");					
+					handle_id=handleGeneration();					
 					pingSitesCommand(action[handle_id_location],handle_id);
+					sprintf(reply_string,"%d",handle_id);
+					DEBUG_PRINT("%s",reply_string);						
 			}
 			else if ((strncmp(action[command_location],"showHandles",strlen("showHandles")))==0){
 					DEBUG_PRINT("Inside showHandles");
@@ -468,11 +494,11 @@ int commandAnalysis(char inputCommand[]){
 					DEBUG_PRINT("Inside showHandleStatus");	
 			}
 			else if ((strncmp(action[command_location],"exit",strlen("exit")))==0){			
-	  			return 0;
+	  			return "exit";
 			}
 	  		else
 	  		{	
-	  			return -1;
+	  			return NULL;
 	  		}
 	  		
 		}
@@ -486,7 +512,7 @@ int commandAnalysis(char inputCommand[]){
 			free(action);//clear  the request recieved 
 		}
 
-		return handle_id;
+		return reply_string;
 }
 
 
@@ -497,21 +523,20 @@ void *client_connections(void *client_sock_id){
 	//int thread_sock = (int*)(client_sock_id);	
 	int thread_sock = (intptr_t)(client_sock_id);	
 	ssize_t read_bytes=0;
-	char message_client[MAXBUFSIZE];//store message from client 
-	char handle_string[MAXBUFSIZE];
+	char message_client[MAXBUFSIZE];//store message from client 	
 	int exitFlag=1;
+	char *handle_string;
 	
 	//Wait for command from Client 
 	//Recieve the message from client  and reurn back to client 
 	//while(exitFlag){
 		if((read_bytes =recv(thread_sock,message_client,MAXBUFSIZE,0))>0){
 			DEBUG_PRINT("%s Message length%d\n",message_client,(int)strlen(message_client) );
-			sprintf(handle_string,"%d",commandAnalysis(message_client));
-			exitFlag=commandAnalysis(message_client);
-			DEBUG_PRINT("%s",handle_string);
+			handle_string=commandAnalysis(message_client);
 			sendDataToClient(handle_string,thread_sock);
 		}
 	//}		
+		free(handle_string);
 }
 
 
@@ -619,16 +644,9 @@ int main (int argc, char * argv[] ){
 		exit(-1);
 	}
 
-	struct msqid_ds msqid_ds, *buf;
-    buf = &msqid_ds;
-	buf->msg_qbytes = MAX_SITE_SIZE*sizeof(struct sites_queue);
-	//s_queue.msg_qbytes = 1024;
-	int rtrn = msgctl(msgid, IPC_STAT, &s_queue);
-             printf("\nEnter the number for the\n");
-             printf("member to be changed:\n");                     
-             printf("msg_qbytes     = %d\n",buf->msg_qbytes);
 	
-	             printf("Entry          = ");
+	
+	           
 
     
 	
