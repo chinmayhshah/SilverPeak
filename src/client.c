@@ -21,7 +21,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-#define DEBUGLEVEL
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -41,6 +41,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 #define MAXBUFSIZE 60000
 #define MAX_COMMAND_SIZE 1000
 #define MAX_COL_SIZE 100
+#define MAX_TOTAL_SIZES 20  // add restriction on number of sites on client         
 
 //Socket parameters for Client
 struct sockaddr_in remote;              //"Internet socket address structure"
@@ -73,6 +74,7 @@ void rcvdataFromServer(int socketID){
 
 		DEBUG_PRINT("Read Bytes %d",(int)read_bytes);	
 		DEBUG_PRINT("Message from Server => %s \n",message_server );
+		printf("Handle ID %s\n",message_server);
 
 
 		if ((strlen(message_server)>0) && (message_server[strlen(message_server)-1]=='\n')){
@@ -203,7 +205,7 @@ void helpOptions(){
 	printf("\n pingSites <site> - To ping sites from server <site1,site2,site3> <max ten sites>");
 	printf("\n showHandles - to show all handles of the server");
 	printf("\n showHandleStatus <handle> -to show the status of <handle> , by default for all handles");
-	printf("\n exit -Exit client");
+	printf("\n exit -Exit client \n");
 }
 
 
