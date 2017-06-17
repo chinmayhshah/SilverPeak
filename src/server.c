@@ -51,7 +51,7 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 #define DELAY_TICKS (1)
 #define ERROR (-1)
 #define OK (0)
-#define MAX_TOTAL_SIZES 10 
+
 
 
 //Time set for Time out 
@@ -65,9 +65,11 @@ struct timeval timeout={0,0};
 #define MAX_IP_ADDRESS 500
 #define MAX_SITE_SIZE 1000
 #define TEST_COUNT 10
-
+#define MAX_TOTAL_SITES 10 
 
 #define MAX_HANDLE_IDS 9999 //can be limited to size of the 
+#define MAX_STORAGE_SIZE MAX_HANDLE_IDS*MAX_TOTAL_SITES  // need to be multiplied by site of struct site_name
+
 
 typedef enum _ErrorCodes{
 		STATUS_OK,
@@ -114,9 +116,45 @@ struct sites_queue{
 	
 };
 
-int msgid;
-struct sites_queue s_queue;
+pthread_mutex_t read_shared_mutex;
+pthread_mutex_t write_shared_mutex;
 
+struct site_content shared_array[MAX_STORAGE_SIZE];
+
+void add_site(struct site_content *new_site_results){
+	static site_counts=0;
+	if(site_counts>MAX_STORAGE_SIZE){
+		site_counts=0;
+	}
+	shared_array[site_counts++]=new_site_results;
+	printf("\n \
+		     Site Name  = %s\n  \
+		     MAX Time(ms) = %ld\n \
+	         MIN Time(ms) = %ld\n \
+	         TOTAL Time(ms) = %ld\n \
+	         AVG Time(ms) = %ld\n \
+	         Status  = %d \n \
+	          ",shared_array[site_counts-1].site_name
+	          ,shared_array[site_counts-1].max_time.tv_nsec/1000000 
+	          ,shared_array[site_counts-1].min_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].total_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].avg_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].status
+	         );
+
+}
+
+
+
+
+
+
+
+
+/*************************************************************
+@brief
+
+**************************************************************/
 
 // To find Delta value between start and stop time 
 int delta_t(struct timespec *stop, struct timespec *start, struct timespec *delta_t)
@@ -157,6 +195,7 @@ int delta_t(struct timespec *stop, struct timespec *start, struct timespec *delt
 
 
 /*************************************************************
+@brief
 //Split string on basis of delimiter 
 //Assumtion is string is ended by a null character
 I/p : splitip - Input string to be parsed 
@@ -235,9 +274,12 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 	
 }
 
+/*
+@brief
 
 
 
+*/
 struct timespec connectSite(char host_address[]){
 	//Connect to host_address
 	int site_socket_desc=-1; 
@@ -270,6 +312,12 @@ struct timespec connectSite(char host_address[]){
 
 }
 
+/*
+@brief
+
+
+*/
+
 int sendDataToClient (char sendMessage[],int client_sock)
 {
 	DEBUG_PRINT("Message to Client =>%s",sendMessage);
@@ -277,10 +325,19 @@ int sendDataToClient (char sendMessage[],int client_sock)
 }
 
 
+//Mutex for protection of 
 pthread_mutex_t queue_mutex;
 pthread_mutex_t dequeue_mutex;
 
-//http://www.rowleydownload.co.uk/avr/documentation/index.htm?http://www.rowleydownload.co.uk/avr/documentation/ctl_message_queues.htm
+/*
+@brief
+
+
+
+Initail Ref: http://www.rowleydownload.co.uk/avr/documentation/index.htm?http://www.rowleydownload.co.uk/avr/documentation/ctl_message_queues.htm
+
+*/
+
 void * workerThreadImplementation(){
 	//Convert the hostname to hostIPaddress 
     char host_address[MAX_IP_ADDRESS];
@@ -310,13 +367,6 @@ void * workerThreadImplementation(){
     while(1){
     	bool skip_ping=true;
     	DEBUG_PRINT("Worker Thread implementation");      
-    	/*int rtrn = msgctl(msqid, IPC_STAT, &s_queue);             
-	     printf("msg_qbytes     = %d\n",(int)buf->msg_qbytes);
-	     printf("PID of last rcvd = %d\n",(int)buf->msg_lrpid);
-	     printf("Current no(messages) = %d\n",(int)buf->msg_qnum);
-	     printf("Current no(byes) = %d\n",(int)(buf->__msg_cbytes));
-		
-		*/
 		//Lock Mutex before dequeue from queue
 		pthread_mutex_lock(&dequeue_mutex);	
     	
@@ -427,7 +477,7 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 
 	if ((list_sites=calloc(MAX_COL_SIZE,sizeof(list_sites)))){	
 		DEBUG_PRINT("site List %s \n %s ",site_list_copy,site_list);	
-		if((total_attr_commands=splitString(site_list_copy,",",list_sites,MAX_SITE_SIZE))<0){
+		if((total_attr_commands=splitString(site_list_copy,",",list_sites,MAX_TOTAL_SITES))<0){
 			perror("Split");
 		}
 		for(i=1;i<total_attr_commands;i++){
