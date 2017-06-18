@@ -135,7 +135,8 @@ int handleGeneration(int command_type){
 	static int handle_count=0;
 	if(command_type==INC_HANDLE){
 		if(handle_count > MAX_HANDLE_IDS){
-			handle_count=0;	
+			handle_count=1;	
+			return handle_count;
 		}
 		return ++handle_count;
 	}
@@ -153,7 +154,7 @@ int handleGeneration(int command_type){
 pthread_mutex_t shared_array_mutex;
 struct content{
 	int site_no;
-	struct site_content site_data[MAX_TOTAL_SITES];
+	struct site_content site_data[MAX_TOTAL_SITES+1];
 };
 
 struct content shared_array[MAX_HANDLE_IDS];
@@ -237,7 +238,7 @@ char * showHandleStatus(int handle_id){
 		strcat(message_string,"\n-------pingSites(Time(ms))-------- \n");			
 			strcat(message_string,"\ns_no|h_id|site name|avg|min|max|status\n");			
 			s_no=0;
-			for(h=1;h<=end;h++){
+			for(h=0;h<=end;h++){
 				for(i=0;i<shared_array[h].site_no;i++){
 					s_no++;
 					sprintf(conversion,"%d. %d %s %d %d %d %s \n",
@@ -618,13 +619,13 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 	//enqueue the sites to message queue 
 	
 	int total_attr_commands=0,i=0;
-	char site_list_copy[MAX_SITE_SIZE];
+	char site_list_copy[MAX_SITE_SIZE+1];
 	static const struct site_content EmptyStruct;
 	int site_loc=0;
 	struct sites_queue s_queue;
 
 	//clear before back uo
-	memset(site_list_copy,0,MAX_SITE_SIZE);
+	memset(site_list_copy,0,(MAX_SITE_SIZE+1));
 	strncpy(site_list_copy,site_list,strlen(site_list));
 	
 	//split into different sites
@@ -642,13 +643,13 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 				if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
 					strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
 					printf("%s i value %d \n",s_queue.q_site_content.site_name,i );
-					
-					site_loc=add_site(&s_queue.q_site_content);
-					//s_queue.q_site_content.site_no=site_loc;									
-					pthread_mutex_lock(&queue_mutex);			
 					s_queue.mtype=1;
 					s_queue.q_site_content.handle_id=client_handle_id;
 					s_queue.q_site_content.status=IN_QUEUE;	
+					site_loc=add_site(&s_queue.q_site_content);
+					//s_queue.q_site_content.site_no=site_loc;									
+					pthread_mutex_lock(&queue_mutex);			
+					
 					if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
 				            perror("msgsnd");
 				    pthread_mutex_unlock(&queue_mutex);   		   				    
@@ -864,13 +865,7 @@ int main (int argc, char * argv[] ){
 		close(server_sock);
 		exit(-1);
 	}
-
-	
-	
-	           
-
-    
-	
+            	
 	//Spawn MAX_WORKER_THREADS
 	for(i=0;i<MAX_WORKER_THREADS;i++){
 			//Create the pthread 
