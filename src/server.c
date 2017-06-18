@@ -42,10 +42,10 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 #define MAXBUFSIZE 60000  
 #define SERV_PORT 8000
 #define MAXPORTSIZE 6
-#define MAX_COL_SIZE 100
+#define MAX_COL_SIZE 200
 
 //Worker Threads
-#define MAX_WORKER_THREADS 3        
+#define MAX_WORKER_THREADS 5       
 
 #define NSEC_PER_SEC (1000000000)
 #define DELAY_TICKS (1)
@@ -57,8 +57,6 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 //Time set for Time out 
 struct timeval timeout={0,0};     
                    
-
-
 //sockets and connection parameters
 #define LISTENQ 1000 
 
@@ -67,7 +65,7 @@ struct timeval timeout={0,0};
 #define TEST_COUNT 10
 #define MAX_TOTAL_SITES 10 
 
-#define MAX_HANDLE_IDS 9999 //can be limited to size of the 
+#define MAX_HANDLE_IDS 10 //can be limited to size of the 
 #define MAX_STORAGE_SIZE MAX_HANDLE_IDS*MAX_TOTAL_SITES  // need to be multiplied by site of struct site_name
 
 
@@ -82,13 +80,17 @@ typedef enum _ErrorCodes{
 		
 }ErrorCodes;
 
-// For input command split 
+
+//Handle Status
 enum HANDLE_STATUS{		
-		IN_QUEUE,//Command type
-		IN_PROGRESS,//Extra Character
-		COMPLETE,//Handle info
+		IN_QUEUE,
+		IN_PROGRESS,
+		COMPLETE,
 		IN_ERROR
-};//Command format
+};//different handle status
+
+
+char handle_status[4][20]={"IN_QUEUE","IN_PROGRESS","COMPLETE","IN_ERROR"};
 
 struct site_content{
 	char site_name[MAX_IP_ADDRESS];
@@ -108,6 +110,8 @@ typedef enum COMMANDLOCATION{
 		handle_id_location,//Handle info
 }COMMAND_LC;//Command format
 
+
+
 //Message queue implementation with mutex and conditional variables 
 
 struct sites_queue{
@@ -116,18 +120,51 @@ struct sites_queue{
 	
 };
 
-pthread_mutex_t read_shared_mutex;
-pthread_mutex_t write_shared_mutex;
+int msgid;
+struct sites_queue s_queue;
 
+
+enum handle_commands {SHOW_HANDLE,INC_HANDLE,DEC_HANDLE};
+
+
+/*
+A handle generator ,limit of handle ids(MAX_HANDLE_IDS) 
+*/
+int handleGeneration(int command_type){
+	static int handle_count=0;
+	if(command_type==INC_HANDLE){
+		if(handle_count > MAX_HANDLE_IDS){
+			handle_count=0;	
+		}
+		return ++handle_count;
+	}
+	else if (command_type==SHOW_HANDLE){
+		DEBUG_PRINT("Handle ID value %d",handle_count);
+		return handle_count;
+	}	
+}
+
+
+
+
+pthread_mutex_t shared_array_mutex;
 struct site_content shared_array[MAX_STORAGE_SIZE];
 
 void add_site(struct site_content *new_site_results){
-	static site_counts=0;
-	if(site_counts>MAX_STORAGE_SIZE){
+	static int site_counts=0;
+	static const struct site_content EmptyStruct;
+
+	if(site_counts>MAX_STORAGE_SIZE || handleGeneration(SHOW_HANDLE)>MAX_HANDLE_IDS ) {
 		site_counts=0;
 	}
-	shared_array[site_counts++]=new_site_results;
-	printf("\n \
+	pthread_mutex_lock(&shared_array_mutex);	
+	//search for same handle ids initially and clear them 
+	shared_array[site_counts]= EmptyStruct;
+	shared_array[site_counts++]=*(new_site_results);
+	shared_array[site_counts].handle_id=-1;
+	pthread_mutex_unlock(&shared_array_mutex);	
+
+	DEBUG_PRINT("\n \
 		     Site Name  = %s\n  \
 		     MAX Time(ms) = %ld\n \
 	         MIN Time(ms) = %ld\n \
@@ -141,6 +178,78 @@ void add_site(struct site_content *new_site_results){
 	          ,shared_array[site_counts-1].avg_time.tv_nsec/1000000
 	          ,shared_array[site_counts-1].status
 	         );
+
+}
+
+
+//Search for site based on handle id and site name 
+/*
+int search_site(int handle_id,char *site_name){
+	int search_site_location=0;
+
+	search_site_location = (int*) bsearch (&key, values, 5, sizeof (int), cmpfunc);
+
+
+
+}
+*/
+
+
+
+
+
+char * showHandleStatus(int handle_id){
+	int i=0;
+	char conversion[MAX_COL_SIZE];
+	char *message_string=(char *)calloc(MAXBUFSIZE,sizeof(char));
+	DEBUG_PRINT("Handle Id to be searched %d",handle_id);
+	if(handle_id==0){//no handle input 		
+		int end = handleGeneration(SHOW_HANDLE);
+		if (end==0){
+			strncpy(message_string,"No Handle IDs Found",strlen("No Handle IDs Found"));	
+		}else{
+			strcat(message_string,"\n-------pingSites(Time(ms))-------- \n");			
+			strcat(message_string,"\ns_no|h_id|site name|avg|min|max|status\n");			
+			for(i=0;shared_array[i].handle_id!=-1;i++){
+
+				sprintf(conversion,"%d. %d %s %d %d %d %s \n",i+1,
+						shared_array[i].handle_id,
+						shared_array[i].site_name,
+			          	(int)(shared_array[i].avg_time.tv_nsec/1000000), 
+			          	(int)(shared_array[i].min_time.tv_nsec/1000000),	      
+			          	(int)(shared_array[i].max_time.tv_nsec/1000000),
+			        	handle_status[shared_array[i].status]);	
+				strcat(message_string,conversion);
+			}
+			strcat(message_string,"\0");
+			
+		}	
+	}
+	DEBUG_PRINT("showHandles Message %s ",message_string);
+	return message_string;
+}
+
+
+//return all the unique handle ids on the server in queue or 
+char *showHandles(){
+	int i=0;
+	char conversion[MAX_COL_SIZE];
+	char *message_string=(char *)calloc(MAXBUFSIZE,sizeof(char));
+	int end = handleGeneration(SHOW_HANDLE);
+	if (end==0){
+		strncpy(message_string,"No Handle IDs Found",strlen("No Handle IDs Found"));	
+
+	}else{
+
+		for(i=1;i<=end;i++){
+			sprintf(conversion,"%d \n",i);
+			strcat(message_string,conversion);
+		}
+		strcat(message_string,"\0");
+		
+	}	
+	DEBUG_PRINT("showHandles Message %s ",message_string);
+	return message_string;
 
 }
 
@@ -312,6 +421,8 @@ struct timespec connectSite(char host_address[]){
 
 }
 
+
+
 /*
 @brief
 
@@ -441,22 +552,8 @@ void * workerThreadImplementation(){
 			
 			DEBUG_PRINT("Looping the Worker Thread");		
 		}	
-		//Printing seconds 
-		printf("\n \
-				     Site Name  = %s\n  \
-				     MAX Time(ms) = %ld\n \
-			         MIN Time(ms) = %ld\n \
-			         TOTAL Time(ms) = %ld\n \
-			         AVG Time(ms) = %ld\n \
-			         Status  = %d \n \
-			          ",dequeue_site.site_name
-			          ,dequeue_site.max_time.tv_nsec/1000000 
-			          ,dequeue_site.min_time.tv_nsec/1000000
-			          ,dequeue_site.total_time.tv_nsec/1000000
-			          ,dequeue_site.avg_time.tv_nsec/1000000
-			          ,dequeue_site.status
-			         );
 		DEBUG_PRINT("Exiting Thread");		
+		add_site(&dequeue_site);
 	}	
 
 }
@@ -485,7 +582,8 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 			
 			if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
 				strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
-				
+				//add_site(&s_queue.q_site_content);
+
 				pthread_mutex_lock(&queue_mutex);
 				if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
 			            perror("msgsnd");
@@ -500,16 +598,6 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 	}	
 }
 
-/*
-A handle generator ,limit of handle ids(MAX_HANDLE_IDS) 
-*/
-int handleGeneration(){
-	static int handle_count=0;
-	if(handle_count > MAX_HANDLE_IDS){
-		handle_count=0;	
-	}
-	return handle_count++;
-}
 
 
 char *commandAnalysis(char inputCommand[]){
@@ -528,27 +616,34 @@ char *commandAnalysis(char inputCommand[]){
 				DEBUG_PRINT("Error in Split \n\r");			
 			}
 			DEBUG_PRINT("%d",total_attr_commands);
-			DEBUG_PRINT("Command Type %s =>%s ",action[1],action[2]);
+			
 			if ((strncmp(action[command_location],"pingSites",strlen("pingSites"))==0)){
 					
 					DEBUG_PRINT("Inside pingSites");					
-					handle_id=handleGeneration();					
+					handle_id=handleGeneration(INC_HANDLE);					
 					pingSitesCommand(action[handle_id_location],handle_id);
 					sprintf(reply_string,"%d",handle_id);
 					DEBUG_PRINT("%s",reply_string);						
 			}
 			else if ((strncmp(action[command_location],"showHandles",strlen("showHandles")))==0){
 					DEBUG_PRINT("Inside showHandles");
+					reply_string=showHandles();
 	  		}
 			else if ((strncmp(action[command_location],"showHandleStatus",strlen("showHandleStatus")))==0){
 					DEBUG_PRINT("Inside showHandleStatus");	
+					if(strcmp(action[handle_id_location],"")==0){
+						reply_string=showHandleStatus(0);
+					}else{
+						reply_string=showHandleStatus(atoi(action[handle_id_location]));
+					}
 			}
 			else if ((strncmp(action[command_location],"exit",strlen("exit")))==0){			
-	  			return "exit";
+	  			//strcpy(reply_string,"exit");
+	  			return NULL;
 			}
 	  		else
 	  		{	
-	  			return NULL;
+	  			strcpy(reply_string,"Unsupported Command");
 	  		}
 	  		
 		}
@@ -570,23 +665,28 @@ char *commandAnalysis(char inputCommand[]){
 void *client_connections(void *client_sock_id){
 	
 	int i=0,total_attr_commands=0;
-	//int thread_sock = (int*)(client_sock_id);	
 	int thread_sock = (intptr_t)(client_sock_id);	
 	ssize_t read_bytes=0;
-	char message_client[MAXBUFSIZE];//store message from client 	
-	int exitFlag=1;
+	char message_client[MAXBUFSIZE];//store message from client 
 	char *handle_string;
 	
 	//Wait for command from Client 
 	//Recieve the message from client  and reurn back to client 
-	//while(exitFlag){
+	do {
 		if((read_bytes =recv(thread_sock,message_client,MAXBUFSIZE,0))>0){
 			DEBUG_PRINT("%s Message length%d\n",message_client,(int)strlen(message_client) );
 			handle_string=commandAnalysis(message_client);
-			sendDataToClient(handle_string,thread_sock);
+			if(handle_string){
+				sendDataToClient(handle_string,thread_sock);
+			}	
 		}
-	//}		
-		free(handle_string);
+	}while(strcmp(handle_string,"exit")!=0 && handle_string!=NULL );
+
+	free(handle_string);
+	if (thread_sock){	
+		close(thread_sock);
+	}
+
 }
 
 

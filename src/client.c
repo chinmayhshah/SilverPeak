@@ -34,7 +34,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
                                 __LINE__, __FUNCTION__, ##args); } while (0)
 
 #define LOCAL_ADDRESS 127.0.0.1
-#define SEVER_PORT 8000        
+#define SEVER_PORT 9000        
 
 
 //size restriction 
@@ -74,8 +74,6 @@ void rcvdataFromServer(int socketID){
 
 		DEBUG_PRINT("Read Bytes %d",(int)read_bytes);	
 		DEBUG_PRINT("Message from Server => %s \n",message_server );
-		printf("Handle ID %s\n",message_server);
-
 
 		if ((strlen(message_server)>0) && (message_server[strlen(message_server)-1]=='\n')){
 				message_server[strlen(message_server)-1]='\0';
@@ -84,6 +82,9 @@ void rcvdataFromServer(int socketID){
 		if (!strncmp(message_server,"Error",strlen("Error")))
 		{
 			printf("\n%s\n",message_server);
+		}else
+		{
+			printf("%s\n",message_server);
 		}	
 	}
 		
@@ -210,7 +211,7 @@ void helpOptions(){
 
 
 int commandAnalysis(char command[MAX_COMMAND_SIZE]){
-	
+
 	char (*action)[MAX_COL_SIZE];
 	int total_attr_commands=0;
 	//Split the command from user , check sanity of commands 
