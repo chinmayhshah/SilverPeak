@@ -407,7 +407,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 
 
 */
-struct timespec connectSite(char host_address[]){
+struct timespec connectSite(char host_address[],char *name){
 	//Connect to host_address
 	int site_socket_desc=-1; 
 	struct timespec start_connectionTime= {0,0};
@@ -430,7 +430,7 @@ struct timespec connectSite(char host_address[]){
 	}
     if(connect(site_socket_desc,(struct sockaddr *)&siteSocket,sizeof(siteSocket))<0){
     	perror(host_address);
-        DEBUG_PRINT("connect error");
+        DEBUG_PRINT("connect error %s",name);
         return ;
     }
     clock_gettime(CLOCK_REALTIME, &stop_connectionTime);
@@ -548,7 +548,7 @@ void * workerThreadImplementation(){
 
 			//Running the connection for ten times and calulating in nano secs	
 			for(i=0;i<10;i++){				
-				redt_connectionTime=connectSite(host_address);
+				redt_connectionTime=connectSite(host_address,dequeue_site.site_name);
 				//DEBUG_PRINT("Time(ns) = %ld ",redt_connectionTime.tv_nsec);          
 				if(redt_connectionTime.tv_nsec > dequeue_site.max_time.tv_nsec ){
 					dequeue_site.max_time.tv_nsec = redt_connectionTime.tv_nsec;
@@ -577,6 +577,13 @@ void * workerThreadImplementation(){
 
 }
 
+
+
+/*
+@brief
+
+
+*/
 
 void pingSitesCommand(char site_list[],int client_handle_id ){
 	//enqueue the sites to message queue 
@@ -659,6 +666,7 @@ char *commandAnalysis(char inputCommand[]){
 			}
 			else if ((strncmp(action[command_location],"exit",strlen("exit")))==0){			
 	  			//strcpy(reply_string,"exit");
+	  			DEBUG_PRINT("EXIT");
 	  			return NULL;
 			}
 	  		else
@@ -696,14 +704,21 @@ void *client_connections(void *client_sock_id){
 		if((read_bytes =recv(thread_sock,message_client,MAXBUFSIZE,0))>0){
 			DEBUG_PRINT("%s Message length%d\n",message_client,(int)strlen(message_client) );
 			handle_string=commandAnalysis(message_client);
+
 			if(handle_string){
+				DEBUG_PRINT("Command is not NULL");
 				sendDataToClient(handle_string,thread_sock);
+			}else{
+				DEBUG_PRINT("Command is NULL");
 			}	
 		}
-	}while(strcmp(handle_string,"exit")!=0 && handle_string!=NULL );
-
-	free(handle_string);
+	}while(handle_string!=NULL );
+	
+	if(handle_string){
+		free(handle_string);
+	}	
 	if (thread_sock){	
+		DEBUG_PRINT("Break While loop and closing socket");
 		close(thread_sock);
 	}
 

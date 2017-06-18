@@ -21,7 +21,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-//#define DEBUGLEVEL
+#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -61,7 +61,6 @@ typedef enum COMMANDLOCATION{
 
 int sendcommandToServer (char *sendMessage,int size,int socketID)
 {
-	//write(socketID,sendMessage,sizeof(sendMessage));	
 	write(socketID,sendMessage,size);	
 	return 1;
 } 
@@ -210,7 +209,20 @@ void helpOptions(){
 }
 
 
-int commandAnalysis(char command[MAX_COMMAND_SIZE]){
+void exit_application(int socket_value){
+
+    if(sendcommandToServer("exit",strlen("exit"),socket_value)<0){
+		    	DEBUG_PRINT("Connected Socket %d",socket_value);
+		    }
+
+	if(socket_value)
+		close(socket_value);
+
+	exit(1);
+}	
+
+
+int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 
 	char (*action)[MAX_COL_SIZE];
 	int total_attr_commands=0;
@@ -241,7 +253,7 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE]){
 				DEBUG_PRINT("Inside showHandleStatus");	
 		}
 		else if ((strncmp(action[command_location],"exit",strlen("exit")))==0){			
-  			
+  			exit_application(socket_value);
 		}
 		else if ((strncmp(action[command_location],"help",strlen("help")))==0){			
   			helpOptions();	
@@ -249,7 +261,7 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE]){
 		}
   		else
   		{	
-  			helpOptions();		  			
+  			printf("Incorrect command. Use 'help' for more info\n" );
   			return -1;
   		}	
   		return 1;
@@ -269,6 +281,7 @@ int main (int argc, char * argv[] ){
 		//exit(1);
 	}
 
+	int client_sock=0;
 	DEBUG_PRINT("%s\n",argv[1] );
 	while(1){
 
@@ -282,9 +295,11 @@ int main (int argc, char * argv[] ){
 		strncpy(command_to_send,command,sizeof(command));
 		strcat(command_to_send,"\0");
 		//check sanity of command
-		if(commandAnalysis(command)>=0){
+		if(commandAnalysis(command,client_sock)>=0){
 		
-			int client_sock=serverConnection();
+			if(!client_sock){
+				client_sock=serverConnection();
+			}	
 
 		    if(client_sock){
 		    	DEBUG_PRINT("Connected Socket %d",client_sock);
@@ -292,13 +307,15 @@ int main (int argc, char * argv[] ){
 			    if(sendcommandToServer(command_to_send,strlen(command_to_send),client_sock)<0){
 			    	DEBUG_PRINT("Connected Socket %d",client_sock);
 			    }
+			    rcvdataFromServer(client_sock);
 
-		    }
+		    }    
 
-		    rcvdataFromServer(client_sock);
-
-		    close(client_sock);
+		  
 		 }   
-	}    
+	}
+	if(client_sock){
+		close(client_sock);    
+	}	
 }
 
