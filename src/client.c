@@ -34,7 +34,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
                                 __LINE__, __FUNCTION__, ##args); } while (0)
 
 #define LOCAL_ADDRESS 127.0.0.1
-#define SEVER_PORT 9000        
+#define SEVER_PORT 8000        
 
 
 //size restriction 

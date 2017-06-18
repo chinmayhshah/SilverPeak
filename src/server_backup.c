@@ -100,7 +100,6 @@ struct site_content{
 	struct timespec total_time;
 	struct timespec avg_time;
 	int status;
-	//int site_no;
 
 };
 
@@ -149,27 +148,22 @@ int handleGeneration(int command_type){
 
 
 pthread_mutex_t shared_array_mutex;
-struct content{
-	int site_no;
-	struct site_content site_data[MAX_TOTAL_SITES];
-};
-
-struct content shared_array[MAX_HANDLE_IDS];
-
+struct site_content shared_array[MAX_STORAGE_SIZE];
 
 void add_site(struct site_content *new_site_results){
-	
+	static int site_counts=0;
 	static const struct site_content EmptyStruct;
-	int handle_id,site_no;
-	//search for same handle ids initially and clear them 
+
+	if(site_counts>MAX_STORAGE_SIZE || handleGeneration(SHOW_HANDLE)>MAX_HANDLE_IDS ) {
+		site_counts=0;
+	}
 	pthread_mutex_lock(&shared_array_mutex);	
-		handle_id=new_site_results->handle_id;	
-		site_no=shared_array[handle_id].site_no;
-		shared_array[handle_id].site_data[site_no]= EmptyStruct;
-		shared_array[handle_id].site_data[site_no]=*(new_site_results);
-		shared_array[handle_id].site_no=site_no+1;
+	//search for same handle ids initially and clear them 
+	shared_array[site_counts]= EmptyStruct;
+	shared_array[site_counts++]=*(new_site_results);
+	shared_array[site_counts].handle_id=-1;
 	pthread_mutex_unlock(&shared_array_mutex);	
-	
+
 	DEBUG_PRINT("\n \
 		     Site Name  = %s\n  \
 		     MAX Time(ms) = %ld\n \
@@ -177,71 +171,53 @@ void add_site(struct site_content *new_site_results){
 	         TOTAL Time(ms) = %ld\n \
 	         AVG Time(ms) = %ld\n \
 	         Status  = %d \n \
-	         site_no = %d \n \
-	          ",shared_array[handle_id].site_data[site_no-1].site_name
-	          ,shared_array[handle_id].site_data[site_no-1].max_time.tv_nsec/1000000 
-	          ,shared_array[handle_id].site_data[site_no-1].min_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].total_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].avg_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].status
-	          ,shared_array[handle_id].site_no       
-
+	          ",shared_array[site_counts-1].site_name
+	          ,shared_array[site_counts-1].max_time.tv_nsec/1000000 
+	          ,shared_array[site_counts-1].min_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].total_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].avg_time.tv_nsec/1000000
+	          ,shared_array[site_counts-1].status
 	         );
 
 }
 
 char * showHandleStatus(int handle_id){
-	int i=0,h;
+	int i=0;
 	char conversion[MAX_COL_SIZE];
 	char *message_string=(char *)calloc(MAXBUFSIZE,sizeof(char));
-	int s_no=0;
-	int end = handleGeneration(SHOW_HANDLE);
-	if (end==0 || handle_id > end){
+	DEBUG_PRINT("Handle Id to be searched %d",handle_id);
+	if(handle_id==0){//no handle input 		
+		int end = handleGeneration(SHOW_HANDLE);
+		if (end==0){
 			strncpy(message_string,"No Handle IDs Found",strlen("No Handle IDs Found"));	
-	}else{
-	 	if(handle_id==0){//no handle input 		
-		
-		
-		strcat(message_string,"\n-------pingSites(Time(ms))-------- \n");			
+		}else{
+			strcat(message_string,"\n-------pingSites(Time(ms))-------- \n");			
 			strcat(message_string,"\ns_no|h_id|site name|avg|min|max|status\n");			
-			s_no=0;
-			for(h=1;h<=end;h++){
-				for(i=0;i<shared_array[h].site_no;i++){
-					s_no++;
-					sprintf(conversion,"%d. %d %s %d %d %d %s \n",
-							s_no,
-							h,
-							shared_array[h].site_data[i].site_name,
-				          	(int)(shared_array[h].site_data[i].avg_time.tv_nsec/1000000), 
-				          	(int)(shared_array[h].site_data[i].min_time.tv_nsec/1000000),	      
-				          	(int)(shared_array[h].site_data[i].max_time.tv_nsec/1000000),
-				        	handle_status[shared_array[h].site_data[i].status]);	
-					strcat(message_string,conversion);
-				}
-			}	
+			for(i=0;shared_array[i].handle_id!=-1;i++){
+
+				sprintf(conversion,"%d. %d %s %d %d %d %s \n",i+1,
+						shared_array[i].handle_id,
+						shared_array[i].site_name,
+			          	(int)(shared_array[i].avg_time.tv_nsec/1000000), 
+			          	(int)(shared_array[i].min_time.tv_nsec/1000000),	      
+			          	(int)(shared_array[i].max_time.tv_nsec/1000000),
+			        	handle_status[shared_array[i].status]);	
+				strcat(message_string,conversion);
+			}
 			strcat(message_string,"\0");
 			
 		}	
-	
-		else{
-			DEBUG_PRINT("Handle Id to be searched %d %d",handle_id,shared_array[handle_id].site_no);		
-				for(i=0;i<shared_array[handle_id].site_no;i++){
-					//i=0;
-					sprintf(conversion,"%d. %d %s %d %d %d %s \n",
-								i+1,
-								handle_id,
-								shared_array[handle_id].site_data[i].site_name,
-					          	(int)(shared_array[handle_id].site_data[i].avg_time.tv_nsec/1000000), 
-					          	(int)(shared_array[handle_id].site_data[i].min_time.tv_nsec/1000000),	      
-					          	(int)(shared_array[handle_id].site_data[i].max_time.tv_nsec/1000000),
-					        	handle_status[shared_array[handle_id].site_data[i].status]);	
-						strcat(message_string,conversion);
-					}
-					
-				strcat(message_string,"\0");
-		
-		}
-	}	
+	}
+	else{
+		int start_loc=0 ;//start of the handle ID 
+
+
+
+
+	}
+
+
+
 
 	DEBUG_PRINT("showHandles Message %s ",message_string);
 	return message_string;
@@ -653,7 +629,6 @@ char *commandAnalysis(char inputCommand[]){
 					if(strcmp(action[handle_id_location],"")==0){
 						reply_string=showHandleStatus(0);
 					}else{
-						DEBUG_PRINT("Inside showHandleStatus %d ",atoi(action[handle_id_location]));	
 						reply_string=showHandleStatus(atoi(action[handle_id_location]));
 					}
 			}
