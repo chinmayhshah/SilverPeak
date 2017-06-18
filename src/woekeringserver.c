@@ -121,8 +121,8 @@ struct sites_queue{
 	
 };
 
-
-
+int msgid;
+struct sites_queue s_queue;
 
 
 enum handle_commands {SHOW_HANDLE,INC_HANDLE,DEC_HANDLE};
@@ -164,10 +164,9 @@ struct content shared_array[MAX_HANDLE_IDS];
 int add_site(struct site_content *new_site_results){
 	
 	static const struct site_content EmptyStruct;
-	
+	int handle_id,site_no;
 	//search for same handle ids initially and clear them 
 	pthread_mutex_lock(&shared_array_mutex);	
-		int handle_id,site_no;
 		handle_id=new_site_results->handle_id;	
 		site_no=shared_array[handle_id].site_no;
 		shared_array[handle_id].site_data[site_no]= EmptyStruct;
@@ -187,7 +186,7 @@ int add_site(struct site_content *new_site_results){
 	          ,shared_array[handle_id].site_data[site_no].site_no
 	         );
 	
-	printf("\nShared data  %d handle %d ",shared_array[handle_id].site_data[site_no].site_no,handle_id);
+
 	 return site_no+1;         
 
 }
@@ -508,7 +507,6 @@ void * workerThreadImplementation(){
     struct hostent *hostnet;
     struct in_addr **addresslist;
     int i=0;
-    struct sites_queue s_queue;
     
     struct timespec redt_connectionTime;	
     //Message Queue
@@ -613,15 +611,16 @@ void * workerThreadImplementation(){
 
 
 */
-int msgid;
+
 void pingSitesCommand(char site_list[],int client_handle_id ){
 	//enqueue the sites to message queue 
 	
 	int total_attr_commands=0,i=0;
 	char site_list_copy[MAX_SITE_SIZE];
-	static const struct site_content EmptyStruct;
+	s_queue.mtype=1;
+	s_queue.q_site_content.handle_id=client_handle_id;
+	s_queue.q_site_content.status=IN_QUEUE;
 	int site_loc=0;
-	struct sites_queue s_queue;
 
 	//clear before back uo
 	memset(site_list_copy,0,MAX_SITE_SIZE);
@@ -635,31 +634,28 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 		if((total_attr_commands=splitString(site_list_copy,",",list_sites,MAX_TOTAL_SITES))<0){
 			perror("Split");
 		}
-		
-	
-			for(i=1;i<total_attr_commands;i++){					
 
+			for(i=1;i<total_attr_commands;i++){
+				//printf("\ni %d Enqueue Site %s => %d handle_id %d \n",i,list_sites[i],total_attr_commands,s_queue.q_site_content.handle_id);
+					
 				if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
 					strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
-					printf("%s i value %d \n",s_queue.q_site_content.site_name,i );
+					s_queue.q_site_content.site_no=site_loc;				
 					
 					site_loc=add_site(&s_queue.q_site_content);
-					//s_queue.q_site_content.site_no=site_loc;									
-					pthread_mutex_lock(&queue_mutex);			
-					s_queue.mtype=1;
-					s_queue.q_site_content.handle_id=client_handle_id;
-					s_queue.q_site_content.status=IN_QUEUE;	
+					pthread_mutex_lock(&queue_mutex);	
+					//printf("Send Message on queue");
 					if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
 				            perror("msgsnd");
-				    pthread_mutex_unlock(&queue_mutex);   		   				    
+				    pthread_mutex_unlock(&queue_mutex);   		   
+				    
 
 				}else{
 					DEBUG_PRINT("Error in Site");
 				}     
 			}       
-			
+			//printf("\nExit i %d => handle_id %d",i,s_queue.q_site_content.handle_id); 
 	}
-	printf("Exit pingSitesCommand handle id %d => %d \n",client_handle_id,i );
 	
 }
 
