@@ -21,7 +21,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-#define DEBUGLEVEL
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -243,19 +243,19 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 			perror("Allocation for command ");
 		}
 		DEBUG_PRINT("Command Type %s =>%s ",action[1],action[2]);
-		if ((strncmp(action[command_location],"pingSites",strlen("pingSites"))==0)){
+		if ((strncmp(action[command_location],"pingSites",strlen(action[command_location]))==0)){
 					DEBUG_PRINT("Inside pingSites");
 		}
-		else if ((strncmp(action[command_location],"showHandles",strlen("showHandles")))==0){
+		else if ((strncmp(action[command_location],"showHandles",strlen(action[command_location])))==0){
 				DEBUG_PRINT("Inside showHandles");
   		}
-		else if ((strncmp(action[command_location],"showHandleStatus",strlen("showHandleStatus")))==0){
+		else if ((strncmp(action[command_location],"showHandleStatus",strlen(action[command_location])))==0){
 				DEBUG_PRINT("Inside showHandleStatus");	
 		}
-		else if ((strncmp(action[command_location],"exit",strlen("exit")))==0){			
+		else if ((strncmp(action[command_location],"exit",strlen(action[command_location])))==0){			
   			exit_application(socket_value);
 		}
-		else if ((strncmp(action[command_location],"help",strlen("help")))==0){			
+		else if ((strncmp(action[command_location],"help",strlen(action[command_location])))==0){			
   			helpOptions();	
   			return -1;
 		}

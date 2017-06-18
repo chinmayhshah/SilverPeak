@@ -26,7 +26,7 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-#define DEBUGLEVEL
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -65,7 +65,7 @@ struct timeval timeout={0,0};
 #define TEST_COUNT 10
 #define MAX_TOTAL_SITES 10 
 
-#define MAX_HANDLE_IDS 10 //can be limited to size of the 
+#define MAX_HANDLE_IDS 9999 //can be limited to size of the 
 #define MAX_STORAGE_SIZE MAX_HANDLE_IDS*MAX_TOTAL_SITES  // need to be multiplied by site of struct site_name
 
 
@@ -100,7 +100,7 @@ struct site_content{
 	struct timespec total_time;
 	struct timespec avg_time;
 	int status;
-	//int site_no;
+	int site_no;
 
 };
 
@@ -147,7 +147,9 @@ int handleGeneration(int command_type){
 
 
 
-
+/*
+@brief
+*/
 pthread_mutex_t shared_array_mutex;
 struct content{
 	int site_no;
@@ -156,8 +158,10 @@ struct content{
 
 struct content shared_array[MAX_HANDLE_IDS];
 
+/*
 
-void add_site(struct site_content *new_site_results){
+*/
+int add_site(struct site_content *new_site_results){
 	
 	static const struct site_content EmptyStruct;
 	int handle_id,site_no;
@@ -167,28 +171,55 @@ void add_site(struct site_content *new_site_results){
 		site_no=shared_array[handle_id].site_no;
 		shared_array[handle_id].site_data[site_no]= EmptyStruct;
 		shared_array[handle_id].site_data[site_no]=*(new_site_results);
+		shared_array[handle_id].site_data[site_no].site_no=site_no;
+			
 		shared_array[handle_id].site_no=site_no+1;
 	pthread_mutex_unlock(&shared_array_mutex);	
-	
 	DEBUG_PRINT("\n \
 		     Site Name  = %s\n  \
-		     MAX Time(ms) = %ld\n \
-	         MIN Time(ms) = %ld\n \
-	         TOTAL Time(ms) = %ld\n \
-	         AVG Time(ms) = %ld\n \
 	         Status  = %d \n \
 	         site_no = %d \n \
-	          ",shared_array[handle_id].site_data[site_no-1].site_name
-	          ,shared_array[handle_id].site_data[site_no-1].max_time.tv_nsec/1000000 
-	          ,shared_array[handle_id].site_data[site_no-1].min_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].total_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].avg_time.tv_nsec/1000000
-	          ,shared_array[handle_id].site_data[site_no-1].status
+	         site_no(queue element) = %d \n \
+	          ",shared_array[handle_id].site_data[site_no].site_name
+	          ,shared_array[handle_id].site_data[site_no].status
 	          ,shared_array[handle_id].site_no       
-
+	          ,shared_array[handle_id].site_data[site_no].site_no
 	         );
+	
+
+	 return site_no+1;         
 
 }
+/*
+@brief
+*/
+void update_site(struct site_content *new_site_results){
+	
+	static const struct site_content EmptyStruct;
+	int handle_id,site_no,site_locn=0,i=0;
+	//search for same handle ids initially and clear them 
+	
+	pthread_mutex_lock(&shared_array_mutex);	
+		handle_id=new_site_results->handle_id;	
+
+		site_no=shared_array[handle_id].site_no-1;
+		for(i=0;i<=site_no;i++){
+			//DEBUG_PRINT("%d => %s  2=> %s ",i,shared_array[handle_id].site_data[i].site_name,new_site_results->site_name);
+			if(strcmp(shared_array[handle_id].site_data[i].site_name,new_site_results->site_name)==0){
+				//DEBUG_PRINT("Shared array Updated  %d \n",i);
+				shared_array[handle_id].site_data[i]=*(new_site_results);
+			}	
+		}	
+	pthread_mutex_unlock(&shared_array_mutex);	
+
+}
+
+
+/*
+@brief
+
+
+*/
 
 char * showHandleStatus(int handle_id){
 	int i=0,h;
@@ -247,7 +278,9 @@ char * showHandleStatus(int handle_id){
 	return message_string;
 }
 
-
+/*
+@brief
+*/
 //return all the unique handle ids on the server in queue or 
 char *showHandles(){
 	int i=0;
@@ -420,18 +453,18 @@ struct timespec connectSite(char host_address[],char *name){
     siteSocket.sin_family = AF_INET;
     siteSocket.sin_port = htons( 80 );
     
-
+    static const struct timespec EmptyStruct;
 
 	clock_gettime(CLOCK_REALTIME, &start_connectionTime);
 	if ((site_socket_desc= socket(AF_INET , SOCK_STREAM , 0))<0){
 	    DEBUG_PRINT("Issue in Creating Socket,Try Again !! %d\n",site_socket_desc);
 	    perror("Socket --> Exit ");			        
-		return ;
+		return EmptyStruct;
 	}
     if(connect(site_socket_desc,(struct sockaddr *)&siteSocket,sizeof(siteSocket))<0){
     	perror(host_address);
         DEBUG_PRINT("connect error %s",name);
-        return ;
+        return EmptyStruct;
     }
     clock_gettime(CLOCK_REALTIME, &stop_connectionTime);
  	close(site_socket_desc);
@@ -508,17 +541,19 @@ void * workerThreadImplementation(){
         }
 
 		//s_queue.msg_qbytes = 1024;
-        pthread_mutex_unlock(&dequeue_mutex);
+        
         
         struct site_content dequeue_site= s_queue.q_site_content;
 
-		DEBUG_PRINT("Dequeued Site %s and Handle ID %d ",dequeue_site.site_name,dequeue_site.handle_id);  
-      
+		//printf("Dequeued Site %s and Handle ID %d ",dequeue_site.site_name,dequeue_site.handle_id);  
+      	dequeue_site.status = IN_PROGRESS;
+		DEBUG_PRINT("Update site to be in IN_PROGRESS %s ",dequeue_site.site_name);				
+		update_site(&dequeue_site);
+		pthread_mutex_unlock(&dequeue_mutex);
        
 	    if ((hostnet = gethostbyname(dequeue_site.site_name)) == NULL || !skip_ping) 
 	    {        
 	    	printf("Unreachable site \n");
-	    	dequeue_site.status=IN_ERROR;
 	        perror("hostnet");	
 	        skip_ping=false;
 	    }		    
@@ -543,9 +578,7 @@ void * workerThreadImplementation(){
 			dequeue_site.max_time.tv_nsec=0;
 			dequeue_site.total_time.tv_nsec=0;
 			dequeue_site.avg_time.tv_nsec=0;
-			dequeue_site.status = IN_PROGRESS;
 			
-
 			//Running the connection for ten times and calulating in nano secs	
 			for(i=0;i<10;i++){				
 				redt_connectionTime=connectSite(host_address,dequeue_site.site_name);
@@ -564,15 +597,18 @@ void * workerThreadImplementation(){
 			}	
 			dequeue_site.avg_time.tv_nsec = dequeue_site.total_time.tv_nsec/10;
 			dequeue_site.avg_time.tv_sec = dequeue_site.total_time.tv_sec/10;
+			DEBUG_PRINT("Update site to be in COMPLETE %s ",dequeue_site.site_name);		
 			dequeue_site.status = COMPLETE;
-
-			//Add to completed array of Structs 
-		
 			
-			DEBUG_PRINT("Looping the Worker Thread");		
-		}	
-		DEBUG_PRINT("Exiting Thread");		
-		add_site(&dequeue_site);
+		}else
+		{
+			DEBUG_PRINT("Update site to be in IN_ERROR %s ",dequeue_site.site_name);		
+			DEBUG_PRINT("Could not connect , thus error");		
+			dequeue_site.status = IN_ERROR;
+		}
+
+		
+		update_site(&dequeue_site);
 	}	
 
 }
@@ -593,8 +629,12 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 	s_queue.mtype=1;
 	s_queue.q_site_content.handle_id=client_handle_id;
 	s_queue.q_site_content.status=IN_QUEUE;
-	
+	int site_loc=0;
+
+	//clear before back uo
+	memset(site_list_copy,0,MAX_SITE_SIZE);
 	strncpy(site_list_copy,site_list,strlen(site_list));
+	
 	//split into different sites
 	char (*list_sites)[MAX_COL_SIZE];
 
@@ -608,8 +648,8 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 			
 			if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
 				strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
-				//add_site(&s_queue.q_site_content);
-
+				site_loc=add_site(&s_queue.q_site_content);
+				s_queue.q_site_content.site_no=site_loc;
 				pthread_mutex_lock(&queue_mutex);
 				if (msgsnd(msgid, &s_queue, sizeof(struct site_content), 0) == -1) 
 			            perror("msgsnd");
@@ -625,7 +665,9 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 }
 
 
-
+/*
+@brief
+*/
 char *commandAnalysis(char inputCommand[]){
 
 		int total_attr_commands=0,handle_id=0;
@@ -643,7 +685,7 @@ char *commandAnalysis(char inputCommand[]){
 			}
 			DEBUG_PRINT("%d",total_attr_commands);
 			
-			if ((strncmp(action[command_location],"pingSites",strlen("pingSites"))==0)){
+			if ((strncmp(action[command_location],"pingSites",strlen(action[command_location]))==0)){
 					
 					DEBUG_PRINT("Inside pingSites");					
 					handle_id=handleGeneration(INC_HANDLE);					
@@ -651,11 +693,11 @@ char *commandAnalysis(char inputCommand[]){
 					sprintf(reply_string,"%d",handle_id);
 					DEBUG_PRINT("%s",reply_string);						
 			}
-			else if ((strncmp(action[command_location],"showHandles",strlen("showHandles")))==0){
+			else if ((strncmp(action[command_location],"showHandles",strlen(action[command_location])))==0){
 					DEBUG_PRINT("Inside showHandles");
 					reply_string=showHandles();
 	  		}
-			else if ((strncmp(action[command_location],"showHandleStatus",strlen("showHandleStatus")))==0){
+			else if ((strncmp(action[command_location],"showHandleStatus",strlen(action[command_location])))==0){
 					DEBUG_PRINT("Inside showHandleStatus");	
 					if(strcmp(action[handle_id_location],"")==0){
 						reply_string=showHandleStatus(0);
@@ -687,7 +729,9 @@ char *commandAnalysis(char inputCommand[]){
 
 		return reply_string;
 }
-
+/*
+@brief
+*/
 
 //To correct handling of client connections 
 void *client_connections(void *client_sock_id){
@@ -701,6 +745,7 @@ void *client_connections(void *client_sock_id){
 	//Wait for command from Client 
 	//Recieve the message from client  and reurn back to client 
 	do {
+		memset(message_client,0,MAXBUFSIZE);
 		if((read_bytes =recv(thread_sock,message_client,MAXBUFSIZE,0))>0){
 			DEBUG_PRINT("%s Message length%d\n",message_client,(int)strlen(message_client) );
 			handle_string=commandAnalysis(message_client);
@@ -723,14 +768,6 @@ void *client_connections(void *client_sock_id){
 	}
 
 }
-
-
-void exit_application(){
-
-}
-
-
-
 
 int main (int argc, char * argv[] ){
 

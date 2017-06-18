@@ -3,12 +3,23 @@ Testcases
 ---------
 pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,,,,,,,,,,
 
-pingSites www.google.com, ,www.hackerrank.com,www.msn.com,www.hotmail.com
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com
 
 pingSites www.colorado.edu,asdmasd.asd
 
 pingSites www.colas.edu 
 
-pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co
 
-pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,
+pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.g.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,www.gmail.com,www.cricbuzz.com,www.mit.edu
+
+
+19. 3 www.msn.com 12 11 15 COMPLETE 
+20. 3 www.msn.com 12 11 15 COMPLETE 
+21. 3 www.colorado.edu 14 12 17 COMPLETE 
+22. 3 www.silverpeak.com 0 0 0 IN_ERROR 
+23. 3 www.hackerrank.com 26 25 28 COMPLETE 
+24. 3 www.gmail.com 12 11 14 COMPLETE 
+25. 3 www.yahoo.com 26 17 40 COMPLETE 
+26. 3 www.hotmail.com 58 55 62 COMPLETE 
+27. 3 www.apple.com 50 47 60 COMPLETE 
