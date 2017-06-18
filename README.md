@@ -113,10 +113,6 @@ $ ./bin/ssfi -t 10 ../../SolidFire/
 
 Error Scenarios
 
-$ ./bin/ssfi -t 100 ../../SolidFire/testFile.txt
-$ ./bin/ssfi -t 10 ../../SolidFire/SolidFi
-$ ./bin/ssfi -n 100 ../../SolidFire/SolidFire/ 
-$ ./bin/ssfi 
 
 
 AUTHOR
