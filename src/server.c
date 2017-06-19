@@ -40,7 +40,6 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 
 //size restriction 
 #define MAXBUFSIZE 60000  
-#define SERV_PORT 8000
 #define MAXPORTSIZE 6
 #define MAX_COL_SIZE 200
 
@@ -48,6 +47,7 @@ Server implementation for Client and Server application (SilverPeak Test assignm
 #define MAX_WORKER_THREADS 5       
 
 #define NSEC_PER_SEC (1000000000)
+#define MSEC_PER_SEC (1000000)
 #define DELAY_TICKS (1)
 #define ERROR (-1)
 #define OK (0)
@@ -62,12 +62,10 @@ struct timeval timeout={0,0};
 
 #define MAX_IP_ADDRESS 500
 #define MAX_SITE_SIZE 1000
-#define TEST_COUNT 10
+#define MIN_SITE_SIZE 5
 #define MAX_TOTAL_SITES 10 
 
 #define MAX_HANDLE_IDS 9999 //can be limited to size of the 
-#define MAX_STORAGE_SIZE MAX_HANDLE_IDS*MAX_TOTAL_SITES  // need to be multiplied by site of struct site_name
-
 
 typedef enum _ErrorCodes{
 		STATUS_OK,
@@ -128,17 +126,22 @@ struct sites_queue{
 enum handle_commands {SHOW_HANDLE,INC_HANDLE,DEC_HANDLE};
 
 
-/*
+/***********************************************************************
+@brief
 A handle generator ,limit of handle ids(MAX_HANDLE_IDS) 
-*/
+Input 
+	command_type - INC_HANDLE - Increment and return a handle id 
+Output
+	 A unique new handle id or last handle id in system
+***********************************************************************/
 int handleGeneration(int command_type){
 	static int handle_count=0;
 	if(command_type==INC_HANDLE){
-		if(handle_count > MAX_HANDLE_IDS){
+		if(++handle_count > MAX_HANDLE_IDS){
 			handle_count=1;	
 			return handle_count;
 		}
-		return ++handle_count;
+		return handle_count;
 	}
 	else if (command_type==SHOW_HANDLE){
 		DEBUG_PRINT("Handle ID value %d",handle_count);
@@ -148,20 +151,28 @@ int handleGeneration(int command_type){
 
 
 
-/*
-@brief
-*/
+
 pthread_mutex_t shared_array_mutex;
 struct content{
 	int site_no;
 	struct site_content site_data[MAX_TOTAL_SITES+1];
 };
 
-struct content shared_array[MAX_HANDLE_IDS];
+struct content shared_array[MAX_HANDLE_IDS+1];//an array used for easy searching of handle ids 
 
-/*
+/***********************************************************************
+@brief
+Add Site contents to the array (shared_array).
 
-*/
+Input - new site data  of type  struct site_content
+		
+Output - add a new site at the location of  handle_id
+       - update the number of sites hold by the handle id 
+       
+       * protected by shared_array_mutex for access of shared_array.
+       * It acts more of hash map
+***********************************************************************/
+
 int add_site(struct site_content *new_site_results){
 	
 	static const struct site_content EmptyStruct;
@@ -171,6 +182,9 @@ int add_site(struct site_content *new_site_results){
 		int handle_id,site_no;
 		handle_id=new_site_results->handle_id;	
 		site_no=shared_array[handle_id].site_no;
+		if(site_no>MAX_TOTAL_SITES){//overflow of total site numbers 
+			site_no=0;
+		}
 		shared_array[handle_id].site_data[site_no]= EmptyStruct;
 		shared_array[handle_id].site_data[site_no]=*(new_site_results);
 		shared_array[handle_id].site_data[site_no].site_no=site_no;
@@ -188,13 +202,23 @@ int add_site(struct site_content *new_site_results){
 	          ,shared_array[handle_id].site_data[site_no].site_no
 	         );
 	
-	printf("\nShared data  %d handle %d ",shared_array[handle_id].site_data[site_no].site_no,handle_id);
+	DEBUG_PRINT("\nShared data  %d handle %d ",shared_array[handle_id].site_data[site_no].site_no,handle_id);
 	 return site_no+1;         
 
 }
-/*
+/***********************************************************************
 @brief
-*/
+Update Site contents to the array (shared_array).
+
+Input -New status or data of type  struct site_content
+		
+Output 
+       -Update site  status or data of a struct site_content
+ 		using handle id and site_no
+       
+       * protected by shared_array_mutex for access of shared_array
+***********************************************************************/
+
 void update_site(struct site_content *new_site_results){
 	
 	static const struct site_content EmptyStruct;
@@ -204,11 +228,9 @@ void update_site(struct site_content *new_site_results){
 	pthread_mutex_lock(&shared_array_mutex);	
 		handle_id=new_site_results->handle_id;	
 
-		site_no=shared_array[handle_id].site_no-1;
+		site_no=shared_array[handle_id].site_no-1;/// total sites stored in mapping to handle_id
 		for(i=0;i<=site_no;i++){
-			//DEBUG_PRINT("%d => %s  2=> %s ",i,shared_array[handle_id].site_data[i].site_name,new_site_results->site_name);
 			if(strcmp(shared_array[handle_id].site_data[i].site_name,new_site_results->site_name)==0){
-				//DEBUG_PRINT("Shared array Updated  %d \n",i);
 				shared_array[handle_id].site_data[i]=*(new_site_results);
 			}	
 		}	
@@ -217,11 +239,17 @@ void update_site(struct site_content *new_site_results){
 }
 
 
-/*
+
+/***********************************************************************
 @brief
+Implements the display of all the handle ids  or handle id with required format 
 
-
-*/
+Input - handle_id
+		0 - No handle Id 
+		<number> - A particular handle id 
+Output - a character array of information in following format for handle id or all handle ids
+		s_no|h_id|site name|avg|min|max|status
+***********************************************************************/
 
 char * showHandleStatus(int handle_id){
 	int i=0,h;
@@ -229,16 +257,14 @@ char * showHandleStatus(int handle_id){
 	char *message_string=(char *)calloc(MAXBUFSIZE,sizeof(char));
 	int s_no=0;
 	int end = handleGeneration(SHOW_HANDLE);
-	if (end==0 || handle_id > end){
+	if (end==0 || handle_id > end){//for no handle id in system
 			strncpy(message_string,"No Handle IDs Found",strlen("No Handle IDs Found"));	
 	}else{
-	 	if(handle_id==0){//no handle input 		
-		
-		
+	 	if(handle_id==0){//no handle input 				
 		strcat(message_string,"\n-------pingSites(Time(ms))-------- \n");			
 			strcat(message_string,"\ns_no|h_id|site name|avg|min|max|status\n");			
 			s_no=0;
-			for(h=0;h<=end;h++){
+			for(h=0;h<=end;h++){//for alll handle ids in system
 				for(i=0;i<shared_array[h].site_no;i++){
 					s_no++;
 					sprintf(conversion,"%d. %d %s %d %d %d %s \n",
@@ -254,12 +280,10 @@ char * showHandleStatus(int handle_id){
 			}	
 			strcat(message_string,"\0");
 			
-		}	
-	
+		}		
 		else{
 			DEBUG_PRINT("Handle Id to be searched %d %d",handle_id,shared_array[handle_id].site_no);		
-				for(i=0;i<shared_array[handle_id].site_no;i++){
-					//i=0;
+				for(i=0;i<shared_array[handle_id].site_no;i++){			
 					sprintf(conversion,"%d. %d %s %d %d %d %s \n",
 								i+1,
 								handle_id,
@@ -280,10 +304,14 @@ char * showHandleStatus(int handle_id){
 	return message_string;
 }
 
-/*
+/***********************************************************************
 @brief
-*/
-//return all the unique handle ids on the server in queue or 
+Implements the display of all the handle ids for "showHandles commands
+(return all the unique handle ids on the server)
+Input - None
+Output - a character array of handle ids 
+***********************************************************************/
+
 char *showHandles(){
 	int i=0;
 	char conversion[MAX_COL_SIZE];
@@ -306,15 +334,13 @@ char *showHandles(){
 
 }
 
-
-
-
-
-
-
-
 /*************************************************************
 @brief
+Calulate the difference between two time stamps
+Input 
+1) start and stop timings 
+Ouput 
+1) delta or difference of timings in nsec
 
 **************************************************************/
 
@@ -409,8 +435,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 		//Token Used
 		strcat(p,"\0");
 		// Set the split o/p pointer
-		//allocate size of each string 
-		//copy the token tp each string
+		//allocate size of each string and copy the token tp each string
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
@@ -421,14 +446,12 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 		p=strtok(NULL,delimiter);
 		
 	}
-	//if (sizeofip<maxattr || sizeofip>maxattr){
 	if (sizeofip>maxattr+1){
 		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
 	}	
 	else
 	{	
-		//DEBUG_PRINT("successful split %d %d",sizeofip,maxattr);
 		return sizeofip;//Done split and return successful }
 	}			
 	return sizeofip;	
@@ -437,11 +460,16 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 }
 
 /*
+
+/*************************************************************
 @brief
+Calculate timing parameters of the site to be tested 
+Input -
+		host_address- the address of the site to be tested 
+Ouput 
+	- return of timing parameters of type "struct timespec"
 
-
-
-*/
+**********************************************************/
 struct timespec connectSite(char host_address[],char *name){
 	//Connect to host_address
 	int site_socket_desc=-1; 
@@ -449,7 +477,7 @@ struct timespec connectSite(char host_address[],char *name){
 	struct timespec stop_connectionTime={0,0};
 	struct timespec dt_connectionTime={0,0};
 
-
+	//set up the socket for paramters 
 	struct sockaddr_in siteSocket;   
 	siteSocket.sin_addr.s_addr = inet_addr(host_address);
     siteSocket.sin_family = AF_INET;
@@ -457,7 +485,7 @@ struct timespec connectSite(char host_address[],char *name){
     
     static const struct timespec EmptyStruct;
 
-	clock_gettime(CLOCK_REALTIME, &start_connectionTime);
+	clock_gettime(CLOCK_REALTIME, &start_connectionTime);//note start time 
 	if ((site_socket_desc= socket(AF_INET , SOCK_STREAM , 0))<0){
 	    DEBUG_PRINT("Issue in Creating Socket,Try Again !! %d\n",site_socket_desc);
 	    perror("Socket --> Exit ");			        
@@ -468,40 +496,46 @@ struct timespec connectSite(char host_address[],char *name){
         DEBUG_PRINT("connect error %s",name);
         return EmptyStruct;
     }
-    clock_gettime(CLOCK_REALTIME, &stop_connectionTime);
+    clock_gettime(CLOCK_REALTIME, &stop_connectionTime);//note stop time 
  	close(site_socket_desc);
  	delta_t(&stop_connectionTime, &start_connectionTime, &dt_connectionTime);     
- 	return dt_connectionTime;
+ 	return dt_connectionTime;//return difference of time 
 
 }
 
 
-
-/*
+/*************************************************************
 @brief
+Send data to Client on socket
+Input -
+		sendMessage- Message to be send 
+		client_sock - Socket for communication 
+Ouput 
+	- return of suceess 
 
-
-*/
+**********************************************************/
 
 int sendDataToClient (char sendMessage[],int client_sock)
 {
 	DEBUG_PRINT("Message to Client =>%s",sendMessage);
 	write(client_sock,sendMessage,strlen(sendMessage));		
+	return 1;
 }
 
 
-//Mutex for protection of 
+//Mutex for protection of message queue
 pthread_mutex_t queue_mutex;
 pthread_mutex_t dequeue_mutex;
 
-/*
+/*************************************************************
 @brief
+Implementatio of Worker thread 
+Input -  Dequeue site_content from message queue
 
-
+Output -Performs the timing calculations by creating a socket between 
 
 Initail Ref: http://www.rowleydownload.co.uk/avr/documentation/index.htm?http://www.rowleydownload.co.uk/avr/documentation/ctl_message_queues.htm
-
-*/
+****************************************************************/
 
 void * workerThreadImplementation(){
 	//Convert the hostname to hostIPaddress 
@@ -525,15 +559,14 @@ void * workerThreadImplementation(){
         perror("msgget");      
     }    
 
-    while(1){
+    while(1){// runs continuously 
     	bool skip_ping=true;
     	DEBUG_PRINT("Worker Thread implementation");      
 		//Lock Mutex before dequeue from queue
 		pthread_mutex_lock(&dequeue_mutex);	
     	
     	if(msgrcv(msqid, &s_queue, sizeof (struct site_content), 0, 0)<0 || !skip_ping) {
-            perror("msgrcv");
-            //exit(1);//shouldnt exit but try again (logic imp)
+            perror("msgrcv");        
             s_queue.q_site_content.status=IN_ERROR;
             skip_ping=false;
         }    
@@ -542,12 +575,12 @@ void * workerThreadImplementation(){
         struct site_content dequeue_site= s_queue.q_site_content;
       	dequeue_site.status = IN_PROGRESS;
 		DEBUG_PRINT("Update site to be in IN_PROGRESS %s ",dequeue_site.site_name);				
-		update_site(&dequeue_site);
+		update_site(&dequeue_site); //Update in Progress status
 		
        
 	    if ((hostnet = gethostbyname(dequeue_site.site_name)) == NULL || !skip_ping) 
 	    {        
-	    	printf("Unreachable site \n");
+	    	DEBUG_PRINT("Unreachable site \n");
 	        perror("hostnet");	
 	        skip_ping=false;
 	    }		    
@@ -568,7 +601,7 @@ void * workerThreadImplementation(){
 			dequeue_site.total_time.tv_sec=0;
 			dequeue_site.avg_time.tv_sec=0;
 
-			dequeue_site.min_time.tv_nsec=999999999;
+			dequeue_site.min_time.tv_nsec=999999999;// a high max value 
 			dequeue_site.max_time.tv_nsec=0;
 			dequeue_site.total_time.tv_nsec=0;
 			dequeue_site.avg_time.tv_nsec=0;
@@ -576,7 +609,7 @@ void * workerThreadImplementation(){
 			//Running the connection for ten times and calulating in nano secs	
 			for(i=0;i<10;i++){				
 				redt_connectionTime=connectSite(host_address,dequeue_site.site_name);
-				//DEBUG_PRINT("Time(ns) = %ld ",redt_connectionTime.tv_nsec);          
+				  
 				if(redt_connectionTime.tv_nsec > dequeue_site.max_time.tv_nsec ){
 					dequeue_site.max_time.tv_nsec = redt_connectionTime.tv_nsec;
 					dequeue_site.max_time.tv_sec = redt_connectionTime.tv_sec;
@@ -602,18 +635,25 @@ void * workerThreadImplementation(){
 		}
 
 		
-		update_site(&dequeue_site);
+		update_site(&dequeue_site);// Update status
 	}	
 
 }
 
 
 
-/*
+
+/*************************************************************
 @brief
+Implements the "pingSites command" .It splits the multiple sites and enques them on message queue
+Input - site_list - list of sites for client 
+		- client_handle_id - handle associated with this command
 
 
-*/
+Output - Enqueue site_content from message queue
+	  - Also adds each site to a shared memory between threads to access them using handle id 
+
+****************************************************************/
 int msgid;
 void pingSitesCommand(char site_list[],int client_handle_id ){
 	//enqueue the sites to message queue 
@@ -637,12 +677,13 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 			perror("Split");
 		}
 		
-	
+			//add all the sites to the queue 
 			for(i=1;i<total_attr_commands;i++){					
 
-				if(strcmp(list_sites[i],"")!=0){//check if site is present or error				
+				if(strcmp(list_sites[i],"")!=0 && (strlen(list_sites[i])>MIN_SITE_SIZE)){//check if site is present or error				
+				
 					strcpy(s_queue.q_site_content.site_name,list_sites[i]);			
-					printf("%s i value %d \n",s_queue.q_site_content.site_name,i );
+					DEBUG_PRINT("%s i value %d \n",s_queue.q_site_content.site_name,i );
 					s_queue.mtype=1;
 					s_queue.q_site_content.handle_id=client_handle_id;
 					s_queue.q_site_content.status=IN_QUEUE;	
@@ -660,14 +701,20 @@ void pingSitesCommand(char site_list[],int client_handle_id ){
 			}       
 			
 	}
-	printf("Exit pingSitesCommand handle id %d => %d \n",client_handle_id,i );
+	DEBUG_PRINT("Exit pingSites Command handle id %d => %d \n",client_handle_id,i );
 	
 }
 
 
-/*
+/*************************************************************
 @brief
-*/
+Checks the sanity of each command from client and performs appropriate task
+Input - inputCommand - command from  client 
+
+Output -Sanity check for support of command
+       -Split input command into command_type and addiional required input 
+
+****************************************************************/
 char *commandAnalysis(char inputCommand[]){
 
 		int total_attr_commands=0,handle_id=0;
@@ -729,10 +776,15 @@ char *commandAnalysis(char inputCommand[]){
 
 		return reply_string;
 }
-/*
+/*************************************************************
 @brief
-*/
+Implementatio of Client thread and runs continously till exit command
+Input   -client_sock_id - socket id associated with each client connected 
+		-Receives message strings (commands) from client
+Output -Provides handle id for each PingSites Command
+	    - CommandAnalysis used to perform other task  
 
+****************************************************************/
 //To correct handling of client connections 
 void *client_connections(void *client_sock_id){
 	
@@ -869,7 +921,6 @@ int main (int argc, char * argv[] ){
 	//Spawn MAX_WORKER_THREADS
 	for(i=0;i<MAX_WORKER_THREADS;i++){
 			//Create the pthread 
-			//if ((pthread_create(&client_thread,NULL,client_connections,(void *)(intptr_t)(client_sock)))<0){
 			if ((pthread_create(&worker_thread[i],NULL,workerThreadImplementation,(void *)(intptr_t)i))<0){
 				perror("Worker Thread not created");					
 			}	
@@ -878,9 +929,6 @@ int main (int argc, char * argv[] ){
 				worker_thread_count++;
 			}
 	}
-
-
-
 
 	DEBUG_PRINT("Server is running wait for connections");
 	while(1){
@@ -892,19 +940,7 @@ int main (int argc, char * argv[] ){
 				exit(-1);
 				close(server_sock);
 			}
-			//DEBUG_PRINT("connection accepted  %d \n",(int)client_sock);	
-			//mult_sock = (int *)malloc(1);
-			/*if (mult_sock== NULL)//allocate a space of 1 
-			{
-				perror("Malloc mult_sock unsuccessful");
-				close(server_sock);
-				exit(-1);
-			}*/
 			DEBUG_PRINT("Malloc successfully\n");
-			//bzero(mult_sock,sizeof(mult_sock));
-			//*mult_sock = client_sock;
-
-			//DEBUG_PRINT("connection accepted  %d \n",*mult_sock);	
 			
 			//Create the pthread 
 			if ((pthread_create(&client_thread,NULL,client_connections,(void *)(intptr_t)(client_sock)))<0){
@@ -920,12 +956,14 @@ int main (int argc, char * argv[] ){
 		}	
 	}
 	
+	//Wait for worker threads to complete and join
 	for(i=0;i<worker_thread_count;i++){
 		if(pthread_join(worker_thread[i], NULL) == 0)
 				 printf("Worker Thread done\n");
 				else
 				 perror("Worker Thread Join");
 	}
+
 				 	
 	if (client_sock < 0)
 	{
@@ -934,7 +972,7 @@ int main (int argc, char * argv[] ){
 		exit(-1);
 	}
 
-
+	//Remove the message queue 
     if (msgctl(msgid, IPC_RMID, NULL) == -1) {
         perror("msgctl");
         exit(-1);

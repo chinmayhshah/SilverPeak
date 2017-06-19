@@ -1,64 +1,122 @@
-Super Simple File Indexer 
--------------------------
+Simple socket based client and server application (Ping and Retrieval system)
+------------------------------------------------------------------------------
 
- A super Simple File Indexer implemented using multi-threaded text file indexing application 
- printing ten most repeated words in descending order with their counts in the following format
+ A  simple socket based client and server application implemented using multi-threaded 
+ approach to implementing the following commands supported by the client 
 
-<word>	<count>
+
+ 	$ help
+	1. pingSites <site> - To ping sites from server <site1,site2,site3> <max %d sites> 
+		- as specified by  MAX_TOTAL_SITES
+	2. showHandles - to show all handles of the server");
+	3. showHandleStatus <handle> -to show the status of <handle> , by default for all handles
+	4. exit -Exit client 
+	
+	<5. help - to display above commands with syntax>
 
 For example :
+	1.
+		$ pingSites www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com
+		3
 
-Top 10 Words of Directory are 
- 
-Word1 549
-Word2 294
-Word3 193
-..........
-..........
+	2.
+		$ showHandles
+		1
+		2
+		3
+	
+	4. 
+	(i) 
+		$ showHandleStatus
+
+		-------pingSites(Time(ms))-------- 
+
+		s_no|h_id|site name|avg|min|max|status
+		1. 1 www.google.com 26 11 69 COMPLETE 
+		2. 2 www.google.com 38 37 39 COMPLETE 
+		3. 2 www.hackerrank.com 53 52 55 COMPLETE 
+		4. 2 www.msn.com 12 12 14 COMPLETE 
+		5. 2 www.hotmail.com 57 56 60 COMPLETE 
+		6. 3 www.hackerrank.com 136 30 508 COMPLETE 
+		7. 3 www.msn.com 87 10 504 COMPLETE 
+		8. 3 www.hotmail.com 137 57 512 COMPLETE 
+		9. 3 www.colorado.edu 92 12 515 COMPLETE 
+		10. 3 www.yahoo.com 108 40 500 COMPLETE 
+		11. 3 www.gmail.com 12 11 13 COMPLETE 
+		12. 3 www.silverpeak.com 0 0 0 IN_ERROR		
+
+	(ii)
+		$ showHandleStatus 2
+		1. 2 www.google.com 38 37 39 COMPLETE 
+		2. 2 www.hackerrank.com 53 52 55 COMPLETE 
+		3. 2 www.msn.com 12 12 14 COMPLETE 
+		4. 2 www.hotmail.com 57 56 60 COMPLET
+
+	4. 
+	$ exit
 
 
 BUILD
 -----
 
-Navigate to "SolidFire/SolidFire/" folder
-Run "make" the executable "ssfi" will be created in 'bin' folder
+Navigate to "SilverPeak/Client-Server/src" folder
+
+Compile
+-------
+	Client
+	------
+	$ gcc client.c -o ../bin/client
+
+	Server
+	------
+	$  gcc server.c -o ../bin/server -pthread
+
+
+
 
 
 USAGE 
 -----
-./bin/<Executable> -t <Threads>  < directoryPath>
+	Client
+	------
+	./bin/<Executable> 
 
-For example
-$ ./bin/ssfi ~/Desktop/SolidFire/SolidFire/
+	For example
+	$ ./bin/client
 
-By default, the application creates ten threads and crawls the directory path(provided in command line) to search for ".txt" files 
+	Server
+	------
+	./bin/<Executable> <IP> <PORT>
 
-To specify custom threads, use "-t" option, for example
-
-For example
-$ ./ssfi -t 10 ~/Desktop/SolidFire/testDir/
+	For example
+	$ ./bin/server "127.0.0.1" 8000
 
 
-Structure of directory 
+Structure of Directory 
 ---------------------
-	SolidFire
-		--SolidFire
+	SilverPeak
+		--Client-Server
 			--bin — Location of executable file
 			--src — Source files written
-			--obj — object files for each source files
-			--include — Headers files written
 			--doc — Documentation of requirements ..etc
-			Makefile — to build the application
+				--TestCases - Test Commands to run 
 			ReadMe.md — Read Me documentation for general guidelines and information
-	
-		--<TestFiles and Directories>		
+			
+		
 		
 Configuration for default values
 ----------------------------------
 
-Some of the important default parameters set SSFIdefaulttypes.hpp
-(i) DEFAULT_FILE_INDEXER ".txt" - can be used to set another type of file 
-(ii) DEFAULT_WORKER_THREADS - Default threads can be changed 
+Some of the important default parameters set as #defines of client and server
+(i) MAX_TOTAL_SITES 10 - To set the total sites supported per "pingSites" command 
+(ii) MAX_HANDLE_IDS 9999 -To set the max number of handle id 
+(iii) MAX_WORKER_THREADS - Worker threads at the server side can be changed 
+
+Additional at client side 
+(i) LOCAL_ADDRESS - Set the IP address to connect to server 
+	-it is an input to server 
+(ii) SEVER_PORT - Set the port number to connect to the server 
+	-it is an input to the server 
 
 
 Debugging 
@@ -68,50 +126,199 @@ Enable Debugging - Uncomment //#define DEBUGLEVEL
 or 
 GDB command example
 
-$ gdb --args ./bin/ssfi ../../SolidFire/largeFiledir/
-
-Assumptions
------------ 
-
-1) A default set of worker threads spawned if custom worker threads aren't inputted by user
-2) Scenarios where Non-Alphanumeric elements acting as delimiter would result in non-English words
-	For example, I'm are converted to I m and considered as different words.
-3) Maximum performance can be obtained by running on multi-core instance allowing threads to run on different cores.	
-4) Default directory isn't available and need to specify as input
-4) Only one Flag -t supported and path supported without a flag 
+$ gdb --args ./bin/server "127.0.0.1" 9000
 
 
 Implementation 
 --------------
 
-WorkerManager.hpp - Manages methods and tasks of Worker thread
-SearchManager.hpp - Manages methods and tasks of Search thread
-SynchronizedQueue.hpp - Manages methods to provide synchronization between Search thread and Worker threads
-SSFI.hpp - Spawns Threads and Deliver results for Top 10 (defalut) Words in directory
-listtopWords.cpp - Driver of implementation 
+server.c - Manages methods and tasks of SERVER
+client.c - Manages methods and tasks of CLIENT
 
-Each class provides its implementation in detail . 
+Each method has a brief implementation detail
 
+
+	Assumptions
+	----------- 
+
+	1) A default set of worker threads spawned if custom worker threads which are specified by the MAX_WORKER_THREADS values. 
+	2) Individual status of each site is assumed to provided i.e a handle can have sites have different handle_status.
+	3) Sites with "port numbers" and https are not supported and connection made to the port number of 80 of the host server (HTTP). 	
+	4) 
+		Handle status as per requirements are as follows and additionally IN_ERROR has been added: 		
+				IN_QUEUE - Site is enqueue and remains to be dequeue for timing calculations
+				IN_PROGRESS - Site is in process of calculation of timing 
+				COMPLETE - Timing calculation for the site have been completed and stored in s  
+				IN_ERROR - Site syntactically correct , however wasn't able to connect as unavailable or down for time being
+		
+	5) Handle Ids are not flushed and remain till sever runs.
+	6) The overflow of the Handle ids as specified by MAX_HANDLE_IDS. However each handle id can store sites MAX_TOTAL_SITES , thus added on top of original sites and only overwritten when MAX_TOTAL_SITES exhausted
+	7) The overflow of Handle leads to the showing of up to latest using "showHandles" command. While showHandleStatus all handle_id generated by server
+	8) Maximum performance can be obtained by running on multi-core instance allowing threads to run on different cores.	
+	9) Unique sites input with "pingSites" command are assumed 
+	
+
+
+	Design
+	-------
+		a. Server Design 
+			(i)Server sets up a socket on the IP and mentioned at input to accept client connections from multiple clients 
+			(ii)A message queue is created to enqueue and dequeue site_contents
+				 which comprise of the individual site name, associated handleid, handle_status of each site and 
+			(iii)It spawns <MAX_WORKER_THREADS> worker threads which are implemented using workerThreadImplementation() and waits on the 
+				message to dequeue the site_content. A queue_mutex and dequeue_mutex has been used to protect the shared access between different threads.
+				"Conditional Variable" may be used for performance improvement
+
+			(iv) Each client creates a 	thread and implemented using client_connections(). This Thread implementation waits for command input from the client and processes as follows
+
+				 1.pingSites()
+				 	- Implements the "pingSites command" .It splits the multiple sites and enqueues them on message queue. 
+				 	- Also adds each site to a shared memory between threads to access them using handle id.
+				 2.showHandles()
+				 	- Implements the display of all the handle ids for "showHandles command".
+				 3.showHandleStatus()
+				 	- Implements the display of all the handle ids or handle id with the required format as presented in the example "showHandleStatus command".
+				 4.exit
+				 	- closes the socket between the server and client if established.
+			(v) To store and retrieve data a shared_array of struct content is used. It provides faster access using handle_id and site_no. 	 	
+
+		b.Client Deisgn
+			(i) A single threaded solution of client is implemented. 
+			(ii) Takes command line input from user and performs sanity check. 
+			(iii) Client establish a socket connection and send command to client .
+			(iv) It retrieves message from Server and displays on stdout/terminal.
 
 Testing
 -------
 
 
-All commands executed from SolidFire/SolidFire
+All commands executed from SilverPeak/Client-Server/src
+	1.
+		$ pingSites www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.gmail.com,www.silverpeak.com
+		3
 
-1) For a large Single File
-$ ./bin/ssfi -t 100 ../../SolidFire/largeFiledir/
+	2.
+		$ showHandles
+		1
+		2
+		3
+	
+	4. 
+	(i) 
+		$ showHandleStatus
 
-2) For a small Single File
-$ ./bin/ssfi -t 10 ../../SolidFire/lessThanTen/
+		-------pingSites(Time(ms))-------- 
 
-3) For blank or no text file directory 
-$ ./bin/ssfi -t 10 ../../SolidFire/blankDir/
+		s_no|h_id|site name|avg|min|max|status
+		1. 1 www.google.com 26 11 69 COMPLETE 
+		2. 2 www.google.com 38 37 39 COMPLETE 
+		3. 2 www.hackerrank.com 53 52 55 COMPLETE 
+		4. 2 www.msn.com 12 12 14 COMPLETE 
+		5. 2 www.hotmail.com 57 56 60 COMPLETE 
+		6. 3 www.hackerrank.com 136 30 508 COMPLETE 
+		7. 3 www.msn.com 87 10 504 COMPLETE 
+		8. 3 www.hotmail.com 137 57 512 COMPLETE 
+		9. 3 www.colorado.edu 92 12 515 COMPLETE 
+		10. 3 www.yahoo.com 108 40 500 COMPLETE 
+		11. 3 www.gmail.com 12 11 13 COMPLETE 
+		12. 3 www.silverpeak.com 0 0 0 IN_ERROR		
 
-4) For multiple Files and directories
-$ ./bin/ssfi -t 10 ../../SolidFire/
+	(ii)
+		$ showHandleStatus 2
+		1. 2 www.google.com 38 37 39 COMPLETE 
+		2. 2 www.hackerrank.com 53 52 55 COMPLETE 
+		3. 2 www.msn.com 12 12 14 COMPLETE 
+		4. 2 www.hotmail.com 57 56 60 COMPLET
+
+	4. 
+	$ exit
+
 
 Error Scenarios
+---------------
+
+a. 
+	
+	$ pingSites www.colas.edu,qqq 
+	  5
+
+	$ showHandleStatus 5
+		1. 5 www.colas.edu 0 0 0 IN_ERROR 
+
+	-- every site is checked if correct or not and not added in queue as in case of "qqq"
+	-- and if site is www.<site_name>.<ext> format ,however not present then a IN_ERROR status added to convey as in case of "www.colas.edu"
+
+
+b. Size specified > MAX_TOTAL_SITES not allowed from client side 
+
+	$ pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,www.colorado.edu,www.yahoo.com,www.g.com,www.silverpeak.com,www.apple.com,www.buildingbrains.co,www.gmail.com,www.cricbuzz.com,www.mit.edu,asd.cas.com,ww.wqewe.com
+
+	 Sites exceeds total limit 10
+
+
+
+c. Other minor error conditions
+	$ showHandleStatus 3234
+		No Handle IDs Found
+	
+	$ showHandles 
+		No Handle IDs Found		
+
+		-- when no handles on server side 
+
+	$pingSites
+
+	Correct USAGE
+	 pingSites <site> - To ping sites from server <site1,site2,site3> <max 10 sites> 
+	
+	$
+	incorrect
+	Incorrect command. Use 'help' for more info
+
+
+d. 
+	pingSites www.google.com,www.hackerrank.com,www.msn.com,www.hotmail.com,, ,, ,,, ,,,
+	6
+	showHandleStatus 6
+	1. 6 www.google.com 12 10 16 COMPLETE 
+	2. 6 www.hackerrank.com 56 51 72 COMPLETE 
+	3. 6 www.msn.com 13 11 15 COMPLETE 
+	4. 6 www.hotmail.com 57 55 60 COMPLETE 
+
+e. running multiple commands 
+	-- a screen shot of data in between 
+	137. 35 www.msn.com 18 10 58 COMPLETE 
+	138. 35 www.hotmail.com 65 55 91 COMPLETE 
+	139. 36 www.google.com 18 11 31 COMPLETE 
+	140. 36 www.hackerrank.com 29 24 40 COMPLETE 
+	141. 36 www.msn.com 15 11 22 COMPLETE 
+	142. 36 www.hotmail.com 60 55 71 COMPLETE 
+	143. 37 www.google.com 18 12 31 COMPLETE 
+	144. 37 www.hackerrank.com 47 44 56 COMPLETE 
+	145. 37 www.msn.com 14 12 22 COMPLETE 
+	146. 37 www.hotmail.com 58 55 61 COMPLETE 
+	147. 38 www.google.com 13 10 16 COMPLETE 
+	148. 38 www.hackerrank.com 46 43 52 COMPLETE 
+	149. 38 www.msn.com 13 11 20 COMPLETE 
+	150. 38 www.hotmail.com 58 55 61 COMPLETE 
+	151. 39 www.google.com 40 37 48 COMPLETE 
+	152. 39 www.hackerrank.com 28 24 32 COMPLETE 
+	153. 39 www.msn.com 14 12 19 COMPLETE 
+	154. 39 www.hotmail.com 0 0 0 IN_PROGRESS 
+	155. 40 www.google.com 13 12 15 COMPLETE 
+	156. 40 www.hackerrank.com 0 0 0 IN_PROGRESS 
+	157. 40 www.msn.com 13 11 14 COMPLETE 
+	158. 40 www.hotmail.com 0 0 0 IN_PROGRESS 
+	159. 41 www.google.com 0 0 0 IN_PROGRESS 
+	160. 41 www.hackerrank.com 0 0 0 IN_QUEUE 
+	161. 41 www.msn.com 0 0 0 IN_QUEUE 
+	162. 41 www.hotmail.com 0 0 0 IN_QUEUE 
+	163. 42 www.google.com 0 0 0 IN_QUEUE 
+	164. 42 www.hackerrank.com 0 0 0 IN_QUEUE 
+	165. 42 www.msn.com 0 0 0 IN_QUEUE 
+	166. 42 www.hotmail.com 0 0 0 IN_QUEUE 
+
+
 
 
 

@@ -21,7 +21,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-#define DEBUGLEVEL
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -40,7 +40,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 //size restriction 
 #define MAXBUFSIZE 60000
 #define MAX_COMMAND_SIZE 1000
-#define MAX_COL_SIZE 100
+#define MAX_COL_SIZE 200
 #define MAX_TOTAL_SITES 10  // add restriction on number of sites on client         
 
 //Socket parameters for Client
@@ -57,11 +57,35 @@ typedef enum COMMANDLOCATION{
 	}COMMAND_LC;//Command format
 
 
+
+/*************************************************************
+@brief
+Send data to Server on socket
+Input -
+		sendMessage- Message to be send 
+		socketID - Socket for communication 
+		size - size of message 
+Ouput 
+	- return of suceess 
+
+**********************************************************/
 int sendcommandToServer (char *sendMessage,int size,int socketID)
 {
 	write(socketID,sendMessage,size);	
 	return 1;
 } 
+
+/*************************************************************
+@brief
+Receive data from Server on socket
+Input -
+		socketID - Socket for communication 
+		
+Ouput 
+	- check sanity 
+	- display message recieved 
+
+**********************************************************/
 
 void rcvdataFromServer(int socketID){
 	ssize_t read_bytes;
@@ -138,12 +162,10 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 			return -1;//return -1 on error 
 		}
 		
-		
 		//Token Used
 		strcat(p,"\0");
 		// Set the split o/p pointer
-		//allocate size of each string 
-		//copy the token tp each string
+		//allocate size of each string //copy the token tp each string
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
@@ -154,20 +176,30 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAX_COL_SIZE],int 
 		p=strtok(NULL,delimiter);
 		
 	}
-	//if (sizeofip<maxattr || sizeofip>maxattr){
+	
 	if (sizeofip>maxattr+1){
 		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
 	}	
 	else
 	{	
-		//DEBUG_PRINT("successful split %d %d",sizeofip,maxattr);
 		return sizeofip;//Done split and return successful }
 	}			
 	return sizeofip;	
 
 	
 }
+
+
+
+/*************************************************************
+@brief
+Receive data from Server on socket
+Input -
+		None
+Ouput - Connection estanlished between the server and client 
+
+**********************************************************/
 
 int serverConnection(){
 
@@ -198,6 +230,10 @@ int serverConnection(){
 
 
 
+/*************************************************************
+@brief
+Display the help options
+**********************************************************/
 void helpOptions(){
 	char command[MAX_COMMAND_SIZE];//Local command storage 
 	printf("\n pingSites <site> - To ping sites from server <site1,site2,site3> <max %d sites>",MAX_TOTAL_SITES);
@@ -219,6 +255,18 @@ void exit_application(int socket_value){
 	exit(1);
 }	
 
+
+
+/*************************************************************
+@brief
+Checks the sanity of each command  performs appropriate task
+Input - command - command from  client 
+	 - socket_value - socket for server 
+
+Output -Sanity check for support of command
+       -Split input command into command_type and additional required input 
+
+****************************************************************/
 
 int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 
@@ -246,7 +294,7 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 					char (*list_sites)[MAX_COL_SIZE];
 					total_sites=0;
 					strncpy(list_backup,action[2],strlen(action[2]));
-					
+					// check sanity of sitesPing
 					if(strlen(list_backup)<1){
 						printf("\n Correct USAGE\n pingSites <site> - To ping sites from server <site1,site2,site3> <max %d sites> \n",MAX_TOTAL_SITES);
 						return -1;	
@@ -308,7 +356,6 @@ int main (int argc, char * argv[] ){
 	}
 
 	int client_sock=0;
-	//DEBUG_PRINT("%s\n",argv[1] );
 	while(1){
 
 		//wait for input from user 
