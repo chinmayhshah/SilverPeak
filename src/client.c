@@ -21,7 +21,7 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 
 
 
-//#define DEBUGLEVEL
+#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -41,15 +41,13 @@ Client implementation for Client and Server application (SilverPeak Test assignm
 #define MAXBUFSIZE 60000
 #define MAX_COMMAND_SIZE 1000
 #define MAX_COL_SIZE 100
-#define MAX_TOTAL_SIZES 20  // add restriction on number of sites on client         
+#define MAX_TOTAL_SITES 10  // add restriction on number of sites on client         
 
 //Socket parameters for Client
 struct sockaddr_in remote;              //"Internet socket address structure"
 struct sockaddr *remoteaddr;
 struct sockaddr_in from_addr;
 int addr_length = sizeof(struct sockaddr);
-
-
 
 // For input command split 
 typedef enum COMMANDLOCATION{
@@ -202,7 +200,7 @@ int serverConnection(){
 
 void helpOptions(){
 	char command[MAX_COMMAND_SIZE];//Local command storage 
-	printf("\n pingSites <site> - To ping sites from server <site1,site2,site3> <max ten sites>");
+	printf("\n pingSites <site> - To ping sites from server <site1,site2,site3> <max %d sites>",MAX_TOTAL_SITES);
 	printf("\n showHandles - to show all handles of the server");
 	printf("\n showHandleStatus <handle> -to show the status of <handle> , by default for all handles");
 	printf("\n exit -Exit client \n");
@@ -225,7 +223,8 @@ void exit_application(int socket_value){
 int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 
 	char (*action)[MAX_COL_SIZE];
-	int total_attr_commands=0;
+	int total_attr_commands=0,total_sites=0;
+	char list_backup[MAX_COMMAND_SIZE];
 	//Split the command from user , check sanity of commands 
 		if ((action=calloc(MAX_COL_SIZE,sizeof(action)))){	
 			
@@ -244,7 +243,31 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
 		}
 		DEBUG_PRINT("Command Type %s =>%s ",action[1],action[2]);
 		if ((strncmp(action[command_location],"pingSites",strlen(action[command_location]))==0)){
+					char (*list_sites)[MAX_COL_SIZE];
+					total_sites=0;
+					strncpy(list_backup,action[2],strlen(action[2]));
+					
+					if(strlen(list_backup)<1){
+						printf("\n Correct USAGE\n pingSites <site> - To ping sites from server <site1,site2,site3> <max %d sites> \n",MAX_TOTAL_SITES);
+						return -1;	
+					}
+
+					if ((list_sites=calloc(MAX_COL_SIZE,sizeof(list_sites)))){	
+						DEBUG_PRINT("List of Sites%s\n",list_backup );
+							if((total_sites=splitString(list_backup,",",list_sites,MAX_TOTAL_SITES*2))<0){
+								perror("Split");
+							}
+			   				else if(total_sites>MAX_TOTAL_SITES+1){
+			   					printf("\n Sites exceeds total limit %d",MAX_TOTAL_SITES);
+
+			   					return -1;	
+			   				}
+			   				DEBUG_PRINT("Total of Sites%d\n",total_sites );
+					  								
+					}
+					
 					DEBUG_PRINT("Inside pingSites");
+
 		}
 		else if ((strncmp(action[command_location],"showHandles",strlen(action[command_location])))==0){
 				DEBUG_PRINT("Inside showHandles");
@@ -256,6 +279,9 @@ int commandAnalysis(char command[MAX_COMMAND_SIZE],int socket_value){
   			exit_application(socket_value);
 		}
 		else if ((strncmp(action[command_location],"help",strlen(action[command_location])))==0){			
+  			helpOptions();	
+  			return -1;
+		}else if ((strncmp(action[command_location],"\r\n",strlen(action[command_location])))==0){			
   			helpOptions();	
   			return -1;
 		}
@@ -282,7 +308,7 @@ int main (int argc, char * argv[] ){
 	}
 
 	int client_sock=0;
-	DEBUG_PRINT("%s\n",argv[1] );
+	//DEBUG_PRINT("%s\n",argv[1] );
 	while(1){
 
 		//wait for input from user 
